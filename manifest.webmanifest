@@ -1,6 +1,6 @@
 {
-  "name": "VASLweb",
-  "short_name": "VASLweb",
+  "name": "VASLweb essai",
+  "short_name": "VASLweb essai",
   "description": "Carte VASL dans le navigateur : ouvrir, jouer et relire des parties .vsav / .vlog.",
   "lang": "fr",
   "id": "./",
