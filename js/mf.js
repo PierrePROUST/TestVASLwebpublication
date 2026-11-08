@@ -94,15 +94,15 @@ const _ligneTerrain = c => !c ? 'ETO:Open Ground'
 // héros, équipages), ou un véhicule selon son vehicleType, avec ses MP
 // imprimés (gpid) pour les coûts « Z », « z », « ¼ » et « ALL ».
 function natureMouvement(p){
-  if(p._natMvt && p._natMvt.seg === p.seg) return p._natMvt.n;
+  if(p._natMvt && memeEtat(p._natMvt.etat, p)) return p._natMvt.n;
   let pr = {};
-  try { pr = _proprietes(_developperPrototypes(_splitTypeState(p.seg), 0)) || {}; } catch(e){}
-  const d = lirePiece(p.seg);
+  try { pr = _proprietes(tsPion(p)) || {}; } catch(e){}
+  const d = lirePiece(p);
   // Le nom de base d'un chef est souvent « geLDR » : son nom affiché
   // (« 9-1 ») vient d'un calque. Les deux sont essayés.
   const noms = [d.nomBase, d.nom, p.nom].map(x => (x || '').trim());
   const nom = noms[0];
-  const te = _typeEtEtat(p.seg), S = te ? decoderTraits(te.etat) : [];
+  const te = tePion(p), S = te ? decoderTraits(te.etat) : [];
   const gpid = ((S[S.length - 1] || '').split(';')[3] || '').trim();
   // Pièce d'une sauvegarde faite avec un module plus ancien : son type de
   // véhicule, voire son type de pion, manque ; la définition actuelle du
@@ -113,7 +113,7 @@ function natureMouvement(p){
       if(!_bdd._typesPion) _bdd._typesPion = new Map();
       if(!_bdd._typesPion.has(gpid)){
         let v = {};
-        try { v = _proprietes(_developperPrototypes(_splitTypeState(x.cmd), 0)) || {}; } catch(e){}
+        try { v = _proprietes(tsSeg(x.cmd)) || {}; } catch(e){}
         _bdd._typesPion.set(gpid, {vehicleType: v.vehicleType || null, CounterType: v.CounterType || null});
       }
       const t = _bdd._typesPion.get(gpid);
@@ -126,7 +126,7 @@ function natureMouvement(p){
   if(pr.vehicleType){
     // Boutonné : VASL l'écrit dans le nom courant (« … BU », sinon « CE »).
     n = {col: _COL_VEH[pr.vehicleType] || null, unite: 'MP', mp: MP_VEHICULES[gpid] || null,
-         bu: /(^|\s)BU(\s|$)/.test(lirePiece(p.seg).nom || '')};
+         bu: /(^|\s)BU(\s|$)/.test(lirePiece(p).nom || '')};
   } else if(pr.CounterType === 'unit'){
     // Allocation de MF (A4.1) : 6 pour un chef ou un héros, 4 sinon ; elle
     // ne sert qu'à l'embarquement (D6.4).
@@ -134,7 +134,7 @@ function natureMouvement(p){
     if(chef) n = {col: 'inf', unite: 'MF', mp: null, mf: 6};
     else if(noms.some(x => /^\d+-\d+-\d+/.test(x))) n = {col: 'inf', unite: 'MF', mp: null, mf: 4};
   }
-  p._natMvt = {seg: p.seg, n};
+  p._natMvt = {etat: empreinteEtat(p), n};
   return n;
 }
 
@@ -516,7 +516,7 @@ function _vcaTraits(T, S){
   return i < 0 ? null : (parseInt(S[i], 10) || 0);
 }
 function _vcaPion(p){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   return te ? _vcaTraits(decoderTraits(te.type), decoderTraits(te.etat)) : null;
 }
 
@@ -594,12 +594,12 @@ function _fumees(m){
 // « ja238H », « ru228C »), les faces brisées <nation>s|h|c<moral>b
 // (« ges9b »).
 function _equivSquad(q){
-  const img = (lirePiece(q.seg).img || '').split('/').pop();
+  const img = (lirePiece(q).img || '').split('/').pop();
   const m = /^[a-z]{2}\d{3}([SHC])/.exec(img) || /^[a-z]{2}([shc])\d/.exec(img);
   return !m ? 0 : m[1].toLowerCase() === 's' ? 1 : 0.5;
 }
 // Camp d'un pion : la nation, dossier de son image (« ge/ », « ru/ »).
-const _nationPion = q => ((lirePiece(q.seg).img || '').match(/^([a-z]{2})\//) || [])[1] || null;
+const _nationPion = q => ((lirePiece(q).img || '').match(/^([a-z]{2})\//) || [])[1] || null;
 // Surempilement de la Location de p (A5.11, A5.1) : équivalents squad du
 // même camp au même niveau au-delà de trois, arrondi au-dessus ; les
 // passagers d'un véhicule ne comptent pas (A5.3).
@@ -625,7 +625,7 @@ function _niveauDecombres(h, s){
   let r = null;
   const garder = k => { if(k > 0 && (r === null || k < r)) r = k; };
   const m = _losPrete;
-  if(m && h && vivants().some(q => /Rubble/i.test(lirePiece(q.seg).nomBase || q.nom || '') && _hexDe(m, q.x, q.y) === h)){
+  if(m && h && vivants().some(q => /Rubble/i.test(lirePiece(q).nomBase || q.nom || '') && _hexDe(m, q.x, q.y) === h)){
     const niv = (s || []).map(_niveauCompteur).filter(v => typeof v === 'number');
     if(niv.length) garder(Math.max(...niv));
   }
@@ -1061,14 +1061,14 @@ function itemsTransportVehicule(v){
 // Exposant de l'image affichée (face cassée : pas d'exposant) ; null si
 // l'image n'est pas encore lue.
 function exposantSmoke(p){
-  const img = lirePiece(p.seg).img;
+  const img = lirePiece(p).img;
   if(!img) return '';
   if(!_exposantsSmoke.has(img)){ chargerImage(img); return null; }
   return _exposantsSmoke.get(img);
 }
 // Dispositifs d'un véhicule, lus dans son trait info : [{type, usage}].
 function dispositifsSmoke(p){
-  const info = lirePiece(p.seg).info || '';
+  const info = lirePiece(p).info || '';
   const r = [];
   for(const x of info.matchAll(/(?:^|[,\s])s([DMPN])(\d+)/g))
     if(!r.some(y => y.type === x[1])) r.push({type: x[1], usage: x[2]});
@@ -1085,8 +1085,8 @@ function dispositifsSmoke(p){
 function aUneMA(p){
   const n = natureMouvement(p);
   if(!n || n.unite !== 'MP') return false;
-  if(/\bMA\b|(?:^|[,\s])(?:A|HE|s|WP|C|D|T|H)\^?\d/.test(lirePiece(p.seg).info || '')) return true;
-  const te = _typeEtEtat(p.seg), S = te ? decoderTraits(te.etat) : [];
+  if(/\bMA\b|(?:^|[,\s])(?:A|HE|s|WP|C|D|T|H)\^?\d/.test(lirePiece(p).info || '')) return true;
+  const te = tePion(p), S = te ? decoderTraits(te.etat) : [];
   const gpid = ((S[S.length - 1] || '').split(';')[3] || '').trim();
   const x = gpid && _bdd && _bdd.parGpid && _bdd.parGpid.get(gpid);
   const def = (x ? x.cmd : '') + '\n' + p.seg;
@@ -1189,7 +1189,7 @@ function _restaurerMvt(photo){
 // rez-de-chaussée. Fortification (B27.1) : une unité placée SOUS un
 // foxhole, une tranchée, un sangar ou un pillbox est dedans.
 function _niveauCompteur(q){
-  const te = _typeEtEtat(q.seg);
+  const te = tePion(q);
   if(!te) return null;
   const T = decoderTraits(te.type);
   const i = T.findIndex(t => /^emb2;/.test(t) && /Lev0/.test(t));
@@ -1201,7 +1201,7 @@ function _niveauCompteur(q){
 }
 const _FORTIFS = [[/Foxhole/i, 'Foxhole'], [/Trench|A-T Ditch/i, 'Trench'], [/Sangar/i, 'Sangar'], [/Pillbox|Bunker|Bombproof/i, 'Pillbox']];
 function _fortifCompteur(q){
-  const noms = [lirePiece(q.seg).nomBase, q.nom];
+  const noms = [lirePiece(q).nomBase, q.nom];
   for(const [re, type] of _FORTIFS) if(noms.some(x => re.test(x || ''))) return type;
   return null;
 }
@@ -1377,7 +1377,7 @@ function recalerMouvements(){
 const TOUCHE_MOUVEMENT = _touche(77, 650);     // moveKey de la carte VASL
 
 function marquerDeplace(p, oui){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return false;
   const T = decoderTraits(te.type), S = decoderTraits(te.etat);
   let change = false;
@@ -1389,7 +1389,7 @@ function marquerDeplace(p, oui){
   if(!change) return false;
   _avantAction();
   const neuf = encoderTraits(S);
-  p.seg = '+/' + p.uid + '/' + te.type + '/' + neuf;
+  fixerEtat(p, neuf);
   _logCmd(`D/${p.uid}/${neuf}/${te.etat}`);
   majApparence(p);
   return true;
@@ -1454,7 +1454,7 @@ function retirerTous(action){
   if(!_source){ chatLog('⚠️ Aucune partie ouverte'); return 0; }
   const noms = new Set(action.pions);
   const cibles = vivants().filter(p => {
-    const d = lirePiece(p.seg);
+    const d = lirePiece(p);
     return noms.has(d.nomBase) || noms.has(d.nom);
   });
   // Un pion masqué par un autre joueur n'a aucune commande : il reste.

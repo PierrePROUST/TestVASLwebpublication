@@ -21,6 +21,7 @@ let _logGroupes = [], _actionNo = 0, _actionOuverte = false;
 // o.horsReseau : consigné dans le log seul.
 function _logCmd(c, o){
   if(!o || typeof o !== 'object') o = {};      // forEach(_logCmd) passe l'indice
+  _planifierSecours();
   if(_net && !o.horsReseau) _netCoup(c);
   // Un coup relu ne change pas la partie : le .vlog le rejouera.
   if(!_etapeLog && !_relecture) _partieModifiee = true;
@@ -113,6 +114,123 @@ function fermerLog(){
   majBoutons();
 }
 
+// ═══ STOCKAGE DU POSTE — IndexedDB ═══
+// Une petite base « aslweb » : le secours de la partie et du log
+// (magasin secours, clés partie et log) et le buildFile analysé (magasin
+// bdd, voir bdd.js). Ouverte à la première demande ; absente ou refusée
+// (Safari privé, certaines ouvertures en file://, voir
+// docs/indexeddb-file.md), _idb() donne null et chacun garde son repli.
+// Toutes les opérations sont sous try/catch : aucune ne lève.
+let _idbPromesse = null;
+function _idb(){
+  if(!_idbPromesse) _idbPromesse = new Promise(f => {
+    try {
+      if(typeof indexedDB === 'undefined' || !indexedDB) return f(null);
+      const rq = indexedDB.open('aslweb', 1);
+      rq.onupgradeneeded = () => {
+        const db = rq.result;
+        for(const m of ['secours', 'bdd']) if(!db.objectStoreNames.contains(m)) db.createObjectStore(m);
+      };
+      rq.onsuccess = () => { const db = rq.result; db.onversionchange = () => db.close(); f(db); };
+      rq.onerror = () => f(null);
+      rq.onblocked = () => f(null);
+    } catch(e){ f(null); }
+  });
+  return _idbPromesse;
+}
+// Lecture : la valeur, undefined si absente, null si la base manque.
+async function _idbLire(magasin, cle){
+  const db = await _idb();
+  if(!db) return null;
+  try {
+    return await new Promise((f, r) => {
+      const rq = db.transaction(magasin, 'readonly').objectStore(magasin).get(cle);
+      rq.onsuccess = () => f(rq.result); rq.onerror = () => r(rq.error);
+    });
+  } catch(e){ return null; }
+}
+// Écriture (valeur undefined : effacement). Vrai si elle a abouti.
+async function _idbEcrire(magasin, cle, v){
+  const db = await _idb();
+  if(!db) return false;
+  try {
+    return await new Promise(f => {
+      const tx = db.transaction(magasin, 'readwrite');
+      if(v === undefined) tx.objectStore(magasin).delete(cle); else tx.objectStore(magasin).put(v, cle);
+      tx.oncomplete = () => f(true); tx.onerror = () => f(false); tx.onabort = () => f(false);
+    });
+  } catch(e){ return false; }
+}
+
+// Segments compactés : chaque TYPE de pièce une fois dans types, chaque
+// segment de pièce [indice du TYPE, « uid/ÉTAT »], les autres [-1, texte].
+// _decompacter redonne les segments à l'octet près (vérifié à l'écriture :
+// un segment qui ne se recompose pas reste en texte).
+function _compacter(segs, types, ix){
+  return segs.map(s => {
+    if(typeof s === 'string' && s.startsWith('+/')){
+      const te = _typeEtEtat(s), k = s.indexOf('/', 2);
+      if(te && k >= 2){
+        const uid = s.substring(2, k);
+        if('+/' + uid + '/' + te.type + '/' + te.etat === s){
+          let i = ix.get(te.type);
+          if(i === undefined){ i = types.length; types.push(te.type); ix.set(te.type, i); }
+          return [i, uid + '/' + te.etat];
+        }
+      }
+    }
+    return [-1, s];
+  });
+}
+function _decompacter(segments, types){
+  return segments.map(([i, r]) => {
+    if(i < 0) return r;
+    const k = r.indexOf('/');
+    return '+/' + r.substring(0, k) + '/' + types[i] + '/' + r.substring(k + 1);
+  });
+}
+
+// Copies de secours, prises à l'instant (l'écriture, elle, est asynchrone).
+// IndexedDB d'abord, localStorage en repli ; écrite en IndexedDB, la copie
+// efface celle du localStorage, qu'une version précédente a pu laisser.
+// Un repli trop gros pour le localStorage le dit au chat (une fois, tant
+// qu'il le reste) au lieu de disparaître sans rien dire.
+const _secoursTropGros = {partie: false, log: false};
+function _secoursLocal(quoi, cle, texte){
+  try {
+    if(texte === null) localStorage.removeItem(cle); else localStorage.setItem(cle, texte());
+    _secoursTropGros[quoi] = false;
+  } catch(e){
+    // Pas de copie périmée non plus.
+    try { localStorage.removeItem(cle); } catch(e2){}
+    if(texte !== null && !_secoursTropGros[quoi]){
+      _secoursTropGros[quoi] = true;
+      chatLog(quoi === 'partie'
+        ? '⚠️ Partie trop grosse pour la copie de secours du navigateur : elle ne sera pas reprise si la page se ferme. L\'exporter (.vsav) avant de fermer.'
+        : '⚠️ Log trop gros pour la copie de secours du navigateur : il ne sera pas repris si la page se ferme. L\'écrire (Log) avant de fermer.');
+    }
+  }
+}
+function _secours(quoi, cle, idb, local){
+  _idb().then(async db => {
+    if(db && await _idbEcrire('secours', quoi, idb === null ? undefined : idb)){
+      try { localStorage.removeItem(cle); } catch(e){}
+      _secoursTropGros[quoi] = false;
+      return;
+    }
+    _secoursLocal(quoi, cle, local);
+  });
+}
+
+// Secours écrit peu après chaque coup, pas seulement à la fermeture :
+// IndexedDB est asynchrone, et Safari iOS peut couper la page avant la
+// fin d'une écriture lancée par pagehide.
+let _secoursMinuteur = 0;
+function _planifierSecours(){
+  clearTimeout(_secoursMinuteur);
+  _secoursMinuteur = setTimeout(() => { _garderLog(); _garderPartie(); }, 800);
+}
+
 // Safari iOS ignore beforeunload et ferme sans prévenir un onglet laissé
 // en arrière-plan : dès que la page se cache, le log pas encore écrit est
 // mis de côté, puis proposé au chargement suivant.
@@ -121,53 +239,92 @@ const _versB64 = o => { let b = ''; for(let i = 0; i < o.length; i += 0x8000) b 
 const _deB64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
 function _garderLog(){
   try {
-    if(!_logEnr || !_logEnr.length || !_logDepart){ localStorage.removeItem(CLE_LOG_SECOURS); return; }
-    localStorage.setItem(CLE_LOG_SECOURS, JSON.stringify({nom: _logNom, depart: _logDepart, enr: _logEnr,
-      groupes: _logGroupes, annexes: [..._annexes].map(([n, d]) => [n, _versB64(d)])}));
-  } catch(e){
-    // Trop gros pour le stockage : pas de copie périmée non plus.
-    try { localStorage.removeItem(CLE_LOG_SECOURS); } catch(e2){}
-  }
+    if(!_logEnr || !_logEnr.length || !_logDepart) return _secours('log', CLE_LOG_SECOURS, null, null);
+    const nom = _logNom, depart = _logDepart.slice(), enr = _logEnr.slice(), groupes = _logGroupes.slice(), annexes = _annexes;
+    const types = [], ix = new Map();
+    _secours('log', CLE_LOG_SECOURS,
+      {nom, date: Date.now(), depart: _compacter(depart, types, ix), enr: _compacter(enr, types, ix), types,
+       groupes, annexes: new Map(annexes)},
+      () => JSON.stringify({nom, depart, enr, groupes, annexes: [...annexes].map(([n, d]) => [n, _versB64(d)])}));
+  } catch(e){}
 }
-function _reprendreLogGarde(){
+// Le log gardé : en IndexedDB, sinon au localStorage. Repris une fois,
+// il est effacé des deux.
+async function _logGarde(){
   let g = null;
-  try { g = JSON.parse(localStorage.getItem(CLE_LOG_SECOURS)); localStorage.removeItem(CLE_LOG_SECOURS); } catch(e){}
+  try {
+    const v = await _idbLire('secours', 'log');
+    if(v && Array.isArray(v.types)){
+      g = {nom: v.nom, depart: _decompacter(v.depart, v.types), enr: _decompacter(v.enr, v.types),
+           groupes: v.groupes, annexes: v.annexes instanceof Map ? v.annexes : new Map()};
+    }
+  } catch(e){ g = null; }
+  if(!g){
+    try {
+      const l = JSON.parse(localStorage.getItem(CLE_LOG_SECOURS));
+      if(l) g = Object.assign(l, {annexes: new Map((l.annexes || []).map(([k, t]) => [k, _deB64(t)]))});
+    } catch(e){}
+  }
+  await _idbEcrire('secours', 'log', undefined);
+  try { localStorage.removeItem(CLE_LOG_SECOURS); } catch(e){}
+  return g;
+}
+async function _reprendreLogGarde(){
+  const g = await _logGarde();
   if(!g || !Array.isArray(g.enr) || !g.enr.length || !Array.isArray(g.depart)) return;
   const n = new Set(g.groupes).size;
   if(!confirm(T(`Le log « ${g.nom} » n'a pas été écrit avant la fermeture de la page (${n} coup(s)). L'écrire maintenant ?`))) return;
-  ecrireVlog({enr: g.enr, groupes: g.groupes || [], depart: g.depart, nom: g.nom,
-              annexes: new Map((g.annexes || []).map(([k, t]) => [k, _deB64(t)]))});
+  ecrireVlog({enr: g.enr, groupes: g.groupes || [], depart: g.depart, nom: g.nom, annexes: g.annexes});
 }
 
 // Même secours pour la partie elle-même, log ou non : sur Android, la PWA
 // glissée hors des applications récentes, ou fermée par le système, ne
 // prévient pas. Dès que la page se cache, une partie modifiée et pas
 // encore exportée est mise de côté, puis proposée au lancement suivant.
+// En IndexedDB : {nom, date, types, segments, annexes} — segments compactés
+// (_compacter), annexes en binaire (Map de Uint8Array, sans base64).
 const CLE_PARTIE_SECOURS = 'aslweb.partieSecours';
 let _partieModifiee = false;   // coups joués depuis l'ouverture ou le dernier .vsav
 function _garderPartie(){
   try {
     // Pas de partie ouverte (reprise ratée, par exemple) : la copie reste.
     if(!_source) return;
-    if(!_partieModifiee){ localStorage.removeItem(CLE_PARTIE_SECOURS); return; }
-    localStorage.setItem(CLE_PARTIE_SECOURS, JSON.stringify({nom: _nomFichier, date: Date.now(),
-      texte: etatPartie().join('\x1b'), annexes: [..._annexes].map(([n, d]) => [n, _versB64(d)])}));
-  } catch(e){
-    try { localStorage.removeItem(CLE_PARTIE_SECOURS); } catch(e2){}
-  }
+    if(!_partieModifiee) return _secours('partie', CLE_PARTIE_SECOURS, null, null);
+    const nom = _nomFichier, date = Date.now(), segs = etatPartie(), annexes = _annexes;
+    const types = [];
+    _secours('partie', CLE_PARTIE_SECOURS,
+      {nom, date, types, segments: _compacter(segs, types, new Map()), annexes: new Map(annexes)},
+      () => JSON.stringify({nom, date, texte: segs.join('\x1b'), annexes: [...annexes].map(([n, d]) => [n, _versB64(d)])}));
+  } catch(e){}
+}
+// La partie gardée : {nom, date, texte, annexes}, ou null.
+async function _partieGardee(){
+  try {
+    const v = await _idbLire('secours', 'partie');
+    if(v && Array.isArray(v.types) && Array.isArray(v.segments))
+      return {nom: v.nom, date: v.date, texte: _decompacter(v.segments, v.types).join('\x1b'),
+              annexes: v.annexes instanceof Map ? v.annexes : new Map()};
+  } catch(e){}
+  try {
+    const g = JSON.parse(localStorage.getItem(CLE_PARTIE_SECOURS));
+    if(g) return Object.assign(g, {annexes: new Map((g.annexes || []).map(([k, t]) => [k, _deB64(t)]))});
+  } catch(e){}
+  return null;
+}
+async function _oublierPartieGardee(){
+  await _idbEcrire('secours', 'partie', undefined);
+  try { localStorage.removeItem(CLE_PARTIE_SECOURS); } catch(e){}
 }
 async function _reprendrePartieGardee(){
-  let g = null;
-  try { g = JSON.parse(localStorage.getItem(CLE_PARTIE_SECOURS)); } catch(e){}
+  const g = await _partieGardee();
   if(!g || typeof g.texte !== 'string' || !g.texte) return;
   const quand = g.date ? new Date(g.date).toLocaleString() : '';
   if(!confirm(T(`La partie « ${g.nom} » a été modifiée et pas enregistrée avant la fermeture${quand ? ` (${quand})` : ''}. La reprendre ?`))){
-    try { localStorage.removeItem(CLE_PARTIE_SECOURS); } catch(e){}
+    await _oublierPartieGardee();
     return;
   }
   try {
-    const annexes = new Map((g.annexes || []).map(([k, t]) => [k, _deB64(t)]));
-    const blob = await _archiveVsav(g.texte, annexes);
+    const blob = await _archiveVsav(g.texte, g.annexes);
     await openGameFile(new File([blob], (g.nom || 'partie') + '.vsav'));
     // Toujours pas exportée : encore à garder si l'on referme.
     if(_source) _partieModifiee = true;

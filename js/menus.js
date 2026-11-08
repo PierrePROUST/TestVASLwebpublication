@@ -189,7 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if(document.visibilityState === 'hidden'){ _garderLog(); _garderPartie(); }
     else if(_net) _net.aReprendre.forEach(f => f());
   });
-  setTimeout(() => { _reprendreLogGarde(); _reprendrePartieGardee(); }, 0);
+  // Le log d'abord, puis la partie, l'un après l'autre (lectures
+  // asynchrones d'IndexedDB).
+  setTimeout(async () => { await _reprendreLogGarde(); await _reprendrePartieGardee(); }, 0);
   // Comme VASSAL à la fermeture : des coups enregistrés et pas encore
   // écrits ne partent pas sans avertissement.
   window.addEventListener('beforeunload', e => {

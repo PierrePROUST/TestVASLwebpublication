@@ -21,11 +21,79 @@ function chargerBDD(){
   return _bddPromesse;
 }
 
+// ── Analyse gardée sur le poste (IndexedDB, magasin bdd) : le buildFile
+// change avec VASL, on le télécharge donc à chaque session (réseau d'abord
+// dans sw.js), mais son analyse XML n'est refaite que s'il a changé.
+// Le spec prévoyait l'ETag (If-None-Match, réponse 304) ; vérifié le
+// 2026-11-08, raw.githubusercontent.com ne s'y prête pas depuis une page :
+// pas d'Access-Control-Expose-Headers (l'ETag se lit null), et un
+// If-None-Match posé par la page déclenche un preflight refusé (403).
+// L'analyse gardée est donc repérée par l'empreinte du texte reçu
+// (FNV-1a et longueur, une dizaine de ms pour 4 Mo) ; le navigateur, lui,
+// revalide le téléchargement par son propre cache HTTP. Hors ligne, c'est
+// l'analyse gardée qui sert.
+// FORMAT_BDD : à augmenter à chaque changement de _analyserBuildFile, pour
+// qu'une analyse gardée par une version précédente soit refaite.
+const FORMAT_BDD = 1;
+let _analysesBuildFile = 0;            // analyses XML faites (tests)
+function _empreinteTexte(t){
+  let h = 0x811c9dc5;
+  for(let i = 0; i < t.length; i++){ h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0') + ':' + t.length;
+}
+
 async function _chargerBDD(){
   chatLog('⏳ Lecture de la base de données des pions VASL…');
-  const r = await fetch(VASL_BUILDFILE_URL);
-  if(!r.ok) throw new Error('HTTP ' + r.status);
-  const doc = new DOMParser().parseFromString(await r.text(), 'application/xml');
+  let garde = null;
+  try {
+    const g = await _idbLire('bdd', 'buildFile');
+    if(g && g.format === FORMAT_BDD && g.url === VASL_BUILDFILE_URL && g.bdd) garde = g;
+  } catch(e){}
+  let r = null, texte = null;
+  try {
+    r = await fetch(VASL_BUILDFILE_URL);
+    if(r.ok) texte = await r.text();
+  } catch(e){ if(!garde) throw e; }
+  if(texte === null && !garde) throw new Error('HTTP ' + (r ? r.status : '?'));
+  const empreinte = texte === null ? null : _empreinteTexte(texte);
+  if(garde && (texte === null || garde.empreinte === empreinte)) return _bddPrete(garde.bdd);
+  const bdd = _analyserBuildFile(texte);
+  _analysesBuildFile++;
+  // Gardée telle qu'analysée, avant tout cache ajouté à l'usage (x.lu,
+  // _typesPion…) : copiée tout de suite (l'écriture est asynchrone) ; les
+  // Map passent par le clonage structuré.
+  const garder = v => _idbEcrire('bdd', 'buildFile', {format: FORMAT_BDD, url: VASL_BUILDFILE_URL, empreinte, date: Date.now(), bdd: v});
+  if(typeof structuredClone === 'function'){
+    try { garder(structuredClone(bdd)); } catch(e){}
+  } else await garder(bdd);
+  return _bddPrete(bdd);
+}
+
+// Le buildFile analysé, prêt à servir.
+function _bddPrete(bdd){
+  _bdd = bdd;
+  // Les TYPE des PieceSlot entrent au registre : un pion posé depuis la
+  // palette partage d'emblée son TYPE avec ses semblables.
+  for(const x of bdd.pions){
+    const te = _typeEtEtat(x.cmd);
+    if(te) entreeType(te.type);
+  }
+  // Les plans de développement des TYPE ont été faits sans les
+  // prototypes : ils se refont (le registre, lui, reste).
+  _viderPlans();
+  rendreToutes();
+  // Les pions déjà sur la carte gagnent les couches de leurs prototypes.
+  for(const p of vivants()) majApparence(p);
+  // Les CVP du Casualties Bin se recomptent dès que le module est connu.
+  _cvpAJour(false);
+  chatLog(`📚 Base VASL ${_bdd.version} : ${bdd.pions.length} pions, ${bdd.cats.length} catégories`);
+  return _bdd;
+}
+
+// Analyse du buildFile : tout ce que _bdd en garde, sans rien toucher
+// d'autre (le résultat se range tel quel dans IndexedDB).
+function _analyserBuildFile(texte){
+  const doc = new DOMParser().parseFromString(texte, 'application/xml');
   const mod = doc.documentElement;
   const cats = [], slots = [], idxCat = new Map();
   // Arbre des widgets de la palette, tel que VASL le construit :
@@ -178,14 +246,7 @@ async function _chargerBDD(){
     qrdc.bin = {onglets: ongletsQRDC.id, rang: ongletsQRDC.enfants.length - 1, carte,
                 titre: (m && m.getAttribute('buttonName')) || carte};
   }
-  _bdd = {cats, pions: slots, protos, parGpid, parChemin, arbre, massRemover, stackMetrics, qrdc, zones, compteurs, version: mod.getAttribute('version')};
-  rendreToutes();
-  // Les pions déjà sur la carte gagnent les couches de leurs prototypes.
-  for(const p of vivants()) majApparence(p);
-  // Les CVP du Casualties Bin se recomptent dès que le module est connu.
-  _cvpAJour(false);
-  chatLog(`📚 Base VASL ${_bdd.version} : ${slots.length} pions, ${cats.length} catégories`);
-  return _bdd;
+  return {cats, pions: slots, protos, parGpid, parChemin, arbre, massRemover, stackMetrics, qrdc, zones, compteurs, version: mod.getAttribute('version')};
 }
 
 // Lecture d'un PieceSlot comme d'une pièce, faite à la demande.

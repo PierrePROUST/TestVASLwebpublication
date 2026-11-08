@@ -16,7 +16,7 @@ function lieu(x, y){
 // Nom d'un pion dans un rapport : tous les pions sont alors traités comme
 // cachés au joueur (PieceAccess.hideAll) — un pion dissimulé s'appelle « ? ».
 function nomRapport(p){
-  return lirePiece(p.seg).masque ? '?' : p.nom;
+  return lirePiece(p).masque ? '?' : p.nom;
 }
 
 function _remplir(format, v){
@@ -58,7 +58,7 @@ function rapportsEtat(p, type, tirees, cmds, nomAvant){
     const cmd = cmds.find(c => c.touche === k && c.nom);
     const format = (ch[2] || '$location$: $newPieceName$ *').replace(/\\(.)/g, '$1');
     // FormattedString : toute propriété du pion peut figurer dans le texte.
-    if(!pr){ const te = _typeEtEtat(p.seg); pr = te ? proprietesPion(p, T, decoderTraits(te.etat)) : {}; }
+    if(!pr){ const te = tePion(p); pr = te ? proprietesPion(p, T, decoderTraits(te.etat)) : {}; }
     rapport(_remplir(format, {...pr, location: lieu(p.x, p.y), oldLocation: p.ancienLieu || lieu(p.x, p.y),
       newPieceName: p.deleted ? nomAvant : nomRapport(p), oldPieceName: nomAvant,
       menuCommand: cmd ? cmd.nom : '', playerName: joueur(), PlayerName: joueur(), playerId: joueur(),
@@ -126,8 +126,8 @@ function envoyer(p, carte, x, y){
   if(carte === _carteJeu) return deplacer([p], x, y);
   _avantAction();
   const k = cle(p), sous = _dessous(p), ax = p.x, ay = p.y;
-  const te = _typeEtEtat(p.seg);
-  if(te) p.seg = '+/' + p.uid + '/' + te.type + '/' + _majPosEtat(te.etat, carte, x, y);
+  const te = tePion(p);
+  if(te) fixerEtat(p, _majPosEtat(te.etat, carte, x, y));
   p.deleted = true; p.ailleurs = carte; p.el.remove(); _sel.delete(p);
   p.retour = {x: ax, y: ay};
   _logCmd(`M/${p.uid}/${carte}/${x}/${y}/null/${_carteJeu}/${ax}/${ay}/${sous}/${joueur()}`);

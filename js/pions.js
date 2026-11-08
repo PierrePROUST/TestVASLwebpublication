@@ -1,9 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // PIONS SUR LA CARTE
-// Chaque pion garde son segment VASSAL complet : ses traits ne sont pas
-// reconstructibles depuis l'affichage, et c'est ce segment, position
-// mise à jour, que l'export réécrit.
-//   seg     « +/uid/TYPE/ÉTAT » courant
+// Chaque pion garde de quoi refaire son segment VASSAL complet : ses
+// traits ne sont pas reconstructibles depuis l'affichage, et c'est ce
+// segment, position mise à jour, que l'export réécrit. Le TYPE, commun à
+// tous les pions d'un modèle, est au registre (TYPES, js/pieces.js) :
+//   typeRef entrée du registre {id, type}, null pour un segment brut (_seg)
+//   etat    ÉTAT courant, changé par fixerEtat seulement
+//   seg     « +/uid/TYPE/ÉTAT », recomposé à la lecture (lecture seule)
 //   x, y    position en pixels VASL natifs
 //   ordre   rang dans la pile, du fond vers le sommet
 // ═══════════════════════════════════════════════════════════════
@@ -147,9 +150,9 @@ function _majPosEtat(etat, carte, x, y){
 
 // Réécrit la position dans le segment du pion.
 function _majSeg(p){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return;
-  p.seg = '+/' + p.uid + '/' + te.type + '/' + _majPosEtat(te.etat, _carteJeu, p.x, p.y);
+  fixerEtat(p, _majPosEtat(te.etat, _carteJeu, p.x, p.y));
 }
 
 function creerPion(seg, ordre){
@@ -159,9 +162,12 @@ function creerPion(seg, ordre){
   const face = document.createElement('img');
   face.className = 'face';
   el.appendChild(face);
-  const p = {id: pions.length, uid: d.uid, seg, x: d.x, y: d.y, ordre, nom: d.nom,
+  // p.seg se lit sur PION : le TYPE est au registre (TYPES), le pion ne
+  // garde que son ÉTAT.
+  const p = Object.assign(Object.create(PION), {id: pions.length, uid: d.uid, x: d.x, y: d.y, ordre, nom: d.nom,
              el, face, sz: Math.round(48 * SC), deleted: false,
-             seul: !!(d.immob && !d.immob.empile)};
+             seul: !!(d.immob && !d.immob.empile)});
+  _attacherSeg(p, seg);
   // Sélection réservée à Maj+clic (ou impossible) : un clic simple la
   // traverse vers les pièces de dessous, comme dans VASSAL.
   if(d.immob && (d.immob.maj || d.immob.jamais)) el.classList.add(d.immob.jamais ? 'immob-jamais' : 'immob');
@@ -291,7 +297,7 @@ async function majApparence(p, d){
   // Deux mises à jour peuvent se croiser (création, puis arrivée de la
   // base) : seule la plus récente pose ses surimpressions.
   const gen = p.gen = (p.gen || 0) + 1;
-  d = d || lirePiece(p.seg);
+  d = d || lirePiece(p);
   p.nom = d.nom;
   // Comme Concealable de VASL : l'adversaire ne voit que le « ? », le
   // joueur qui a dissimulé l'unité la voit, marquée d'un petit « ? ».
@@ -877,7 +883,7 @@ function _decoupeBrut(s){
 // d'identifiant VASSAL : un M/ sur la pièce qui était dessous (null :
 // au fond) la remet à son rang, chez nous comme chez un client VASSAL.
 function _remise(p, sous){
-  const d = lirePiece(p.seg);
+  const d = lirePiece(p);
   if(d.carte !== _carteJeu) return [p.seg];
   return [p.seg, `M/${p.uid}/${_carteJeu}/${d.x}/${d.y}/${sous || 'null'}/${_carteJeu}/${d.x}/${d.y}/null/${joueur()}`];
 }
@@ -1111,10 +1117,10 @@ function rejouerLog(segs){
       // elle aussi : elle le garde en revenant, et dans la sauvegarde.
       const id = _nul(t[0]);
       const p = pions.find(q => q.uid === id && (!q.deleted || q.ailleurs));
-      const te = p && _typeEtEtat(p.seg);
+      const te = p && tePion(p);
       if(te && t[1]){
-        p.seg = '+/' + p.uid + '/' + te.type + '/' + t[1];
-        const d = lirePiece(p.seg);
+        fixerEtat(p, t[1]);
+        const d = lirePiece(p);
         if(d.carte === _carteJeu){ p.x = d.x; p.y = d.y; }
         majApparence(p, d);
         n++;
@@ -1172,8 +1178,8 @@ function _deplacerPiece(uid, [carte, x, y], dessous){
   if(carte !== _carteJeu){
     // Partie de la carte de jeu : sa place, pour l'y remettre.
     if(!p.ailleurs && !p.deleted) p.retour = {x: p.x, y: p.y};
-    const te = _typeEtEtat(p.seg);
-    if(te) p.seg = '+/' + p.uid + '/' + te.type + '/' + _majPosEtat(te.etat, carte, x, y);
+    const te = tePion(p);
+    if(te) fixerEtat(p, _majPosEtat(te.etat, carte, x, y));
     p.deleted = true; p.ailleurs = carte; p.el.remove();
     return true;
   }
@@ -1321,7 +1327,7 @@ _apresSelection.push(() => { if(_liens.size) _planifierLiens(); });
 // palette (onglet Unit, panneau Basic) est posé dans l'hexagone de la MG,
 // lié à elle comme par Ctrl+Alt+L, et sélectionné pour être orienté.
 const GPID_FIRELANE = '8';
-const estMG = p => /^(?:[LMH]MG|\.50-cal)(?![A-Za-z])/.test(lirePiece(p.seg).nomBase || '');
+const estMG = p => /^(?:[LMH]MG|\.50-cal)(?![A-Za-z])/.test(lirePiece(p).nomBase || '');
 function poserFireLane(mg){
   if(!_bdd){ chatLog('⚠️ Base VASL pas encore chargée'); return null; }
   const x = _bdd.parGpid.get(GPID_FIRELANE) || [..._bdd.parGpid.values()].find(y => y.n === 'Firelane');

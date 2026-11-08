@@ -70,6 +70,63 @@ function _typeEtEtat(seg){
           etat: seg.substring(m.index + m[0].length)};
 }
 
+// ═══ REGISTRE DES TYPE ═══
+// Un même modèle de pion (une 4-6-7 allemande, un « ? », un DM…) porte le
+// même TYPE VASSAL, souvent long de plusieurs centaines de caractères. Il
+// est gardé une fois ici ; le pion n'en tient que la référence (typeRef)
+// et son ÉTAT (etat). p.seg recompose le segment, octet pour octet, pour
+// l'export et tout ce qui le lit. Le texte gardé est la sous-chaîne exacte
+// lue dans le fichier, sans normalisation.
+//   TYPES   texte du TYPE → {id, type}
+// La frontière TYPE / ÉTAT est fixée une fois, à la création du pion,
+// par _typeEtEtat (la règle de toujours) ; si elle échoue, le pion reste
+// en « segment brut » (typeRef nul, _seg tel quel).
+const TYPES = new Map();
+function entreeType(type){
+  let e = TYPES.get(type);
+  if(!e){ e = {id: TYPES.size, type}; TYPES.set(type, e); }
+  return e;
+}
+
+// Ce que tout pion hérite : p.seg en lecture seule. Une écriture oubliée
+// échoue bruyamment plutôt que de perdre l'état sans rien dire.
+const PION = {
+  get seg(){ return this.typeRef ? '+/' + this.uid + '/' + this.typeRef.type + '/' + this.etat : this._seg; },
+  set seg(v){ throw new TypeError('p.seg est en lecture seule : fixerEtat(p, état)'); }
+};
+
+// Attache au registre le segment s du pion p. Le segment recomposé doit
+// redonner s à l'identique, sinon le pion le garde brut.
+function _attacherSeg(p, s){
+  const te = _typeEtEtat(s);
+  if(te && p.uid && '+/' + p.uid + '/' + te.type + '/' + te.etat === s){
+    p.typeRef = entreeType(te.type); p.etat = te.etat; p._seg = null;
+  } else {
+    p.typeRef = null; p.etat = null; p._seg = s;
+  }
+}
+
+// TYPE et ÉTAT d'un pion, comme _typeEtEtat(p.seg), sans redécouper.
+// Un objet qui ne porte qu'un seg (pièce de la palette, essai) y passe.
+function tePion(p){
+  if(!p) return null;
+  return p.typeRef ? {type: p.typeRef.type, etat: p.etat} : _typeEtEtat(p.seg);
+}
+
+// Le seul endroit qui change l'ÉTAT d'un pion. Un pion brut dont le
+// segment se découpe pourtant (identifiant à part) est réécrit comme
+// avant, puis rattaché au registre.
+function fixerEtat(p, etat){
+  if(p.typeRef){ p.etat = etat; return; }
+  const te = _typeEtEtat(p._seg);
+  if(te) _attacherSeg(p, '+/' + p.uid + '/' + te.type + '/' + etat);
+}
+
+// Empreinte de l'état d'un pion, pour les caches qui ne doivent se refaire
+// que s'il a changé (comparaison sans recomposer le segment).
+const empreinteEtat = p => p.typeRef ? {r: p.typeRef, e: p.etat} : {r: null, e: p.seg};
+const memeEtat = (a, p) => !!a && (p.typeRef ? a.r === p.typeRef && a.e === p.etat : a.r === null && a.e === p.seg);
+
 // Liste de noms d'images nus (« mofan », « a,b ») : au moins un nom, et
 // rien qu'un « ; » échappé aurait pu y glisser.
 const _listeNoms = s => /\w/.test(s || '') && s.split(',').every(n => /^[\w()+. -]*$/.test(n.trim()));
@@ -164,6 +221,62 @@ function _developperPrototypes(ts, prof){
     }
   }
   return {typ, eta};
+}
+
+// ── Plan de développement d'un TYPE du registre, fait une fois : les
+// traits développés (typ) et, pour chacun, d'où vient son état — l'indice
+// du trait dans l'ÉTAT du pion, ou l'état par défaut du prototype,
+// constant. Même résultat que _developperPrototypes(_splitTypeState(seg), 0)
+// quand TYPE et ÉTAT ont autant de traits (sinon on y revient).
+// Le développement dépend de _bdd, qui arrive plus tard : le plan note
+// les prototypes avec lesquels il a été fait, et se refait s'ils changent
+// (chargerBDD vide aussi les plans : _viderPlans).
+function _planType(e){
+  const protos = (_bdd && _bdd.protos) || null;
+  if(e.plan && e.plan.protos === protos) return e.plan;
+  const typ0 = _traits(e.type), typ = [], src = [];
+  for(let i = 0; i < typ0.length; i++){
+    const m = protos && typ0[i].replace(/\\/g, '').match(/^prototype;([^;]*)/);
+    const def = m && protos.get(m[1]);
+    const pts = def && _developperPrototypes(_splitTypeState(def), 1);
+    if(pts){
+      typ.push(...pts.typ.slice(0, -1));
+      for(const x of pts.eta.slice(0, -1)) src.push({e: x});
+    } else { typ.push(typ0[i]); src.push(i); }
+  }
+  return e.plan = {protos, n: typ0.length, typ, src};
+}
+function _viderPlans(){ for(const e of TYPES.values()) e.plan = null; }
+// Nombre de plans faits (mesure, tests).
+let _plansFaits = 0;
+
+// Traits développés d'un TYPE du registre pour un ÉTAT donné, ou null
+// (découpe en repli : l'appelant reprend le chemin complet).
+function _tsPlan(e, etat){
+  const avant = e.plan;
+  const pl = _planType(e);
+  if(pl !== avant) _plansFaits++;
+  const eta0 = _traits(etat);
+  if(eta0.length !== pl.n) return null;
+  return {typ: pl.typ, eta: pl.src.map(s => typeof s === 'number' ? eta0[s] : s.e)};
+}
+
+// Traits développés d'un pion : _developperPrototypes(_splitTypeState(p.seg), 0)
+// sans redécouper le TYPE ni redévelopper ses prototypes. Les tableaux
+// typ sont partagés entre les pions d'un même TYPE : ne pas les modifier.
+function tsPion(p){
+  if(p && p.typeRef){
+    const ts = _tsPlan(p.typeRef, p.etat);
+    if(ts) return ts;
+  }
+  return _developperPrototypes(_splitTypeState(p.seg), 0);
+}
+// Même chose pour un segment brut (palette, réseau) : par le plan si son
+// TYPE est déjà au registre.
+function tsSeg(seg){
+  const te = _typeEtEtat(seg), e = te && TYPES.get(te.type);
+  const ts = e && _tsPlan(e, te.etat);
+  return ts || _developperPrototypes(_splitTypeState(seg), 0);
 }
 
 // Texte des traits Label (TextLabel) : l'état est le texte saisi.
@@ -417,15 +530,24 @@ const _dansRotation = (rotations, i) => (rotations || []).some(r => r.i < i);
 // la vue, que le pion, droit à l'écran, annule par ailleurs.
 const _rotCSS = a => `rotate(calc(${a}deg + var(--rotVue, 0deg)))`;
 
+// Prend un segment ou un pion : un pion du registre passe par le plan de
+// son TYPE (tsPion), sans recomposer son segment.
 function lirePiece(seg){
-  const ts = _developperPrototypes(_splitTypeState(seg), 0);
-  const etatBP = ts ? ts.eta[ts.eta.length - 1] : seg.substring(seg.lastIndexOf('\t') + 1);
+  let pion = null;
+  if(typeof seg !== 'string'){
+    if(seg && seg.typeRef) pion = seg;
+    else seg = seg ? seg.seg : '';
+  }
+  // Le segment entier d'un pion n'est recomposé qu'en repli.
+  const S = () => pion ? pion.seg : seg;
+  const ts = pion ? tsPion(pion) : tsSeg(seg);
+  const etatBP = ts ? ts.eta[ts.eta.length - 1] : S().substring(S().lastIndexOf('\t') + 1);
   const sm = etatBP.match(/^([^;]*);(-?\d+);(-?\d+);/);
   let img = '', nom = '';
   // Le BasicPiece est le DERNIER trait du type ; une recherche dans tout
   // le segment pouvait tomber sur celui d'une définition imbriquée.
   const bp = ts && ts.typ[ts.typ.length - 1];
-  const pm = (bp && /^piece;/.test(bp) ? bp + '/' : seg).match(/piece;[^;]*;[^;]*;([^;]*);((?:\\.|[^;\/\t\\])*)/);
+  const pm = (bp && /^piece;/.test(bp) ? bp + '/' : S()).match(/piece;[^;]*;[^;]*;([^;]*);((?:\\.|[^;\/\t\\])*)/);
   if(pm){ img = pm[1].replace(/\\/g,'').trim(); nom = pm[2].replace(/\\/g,'').trim(); }
   const couches = _parseLayers(ts);
   // BasicPiece sans image : le pion n'est fait que de ses couches, et sa
@@ -464,7 +586,7 @@ function lirePiece(seg){
   const k = _trait(ts, /^concealment;/);
   const compteurProprio = k ? (k.t.split(';')[1] || '').replace(/\\/g, '').trim() : '';
   return {
-    uid: (seg.match(/^\+\/([^\/]+)\//) || [])[1] || '',
+    uid: pion ? pion.uid : (seg.match(/^\+\/([^\/]+)\//) || [])[1] || '',
     carte: sm ? sm[1] : null, x: sm ? +sm[2] : 0, y: sm ? +sm[3] : 0,
     img, nom: nom || img.split('/').pop(), nomBase: pm ? pm[2].replace(/\\/g,'').trim() : '', couches, faceCouche, rot, masque, hip, masqueNation,
     vt: _pieceVaslTools(ts), page: _pageHtml(ts), rotations, immob: _immobilise(ts),
@@ -1212,7 +1334,7 @@ async function majOverlaysExt(){
   // ceux de la précédente.
   const boards = _losBoards;
   if(!boards || !boards.every(b => b._cv !== undefined)) return;
-  const exts = vivants().filter(p => p.affichageSeul).map(p => ({p, img: lirePiece(p.seg).img}));
+  const exts = vivants().filter(p => p.affichageSeul).map(p => ({p, img: lirePiece(p).img}));
   const sig = exts.map(e => `${e.p.uid}:${e.p.x},${e.p.y}:${e.img}`).join('|');
   if(sig === _ovrExtSig && boards === _ovrExtBoards) return;
   _ovrExtEnCours = true;

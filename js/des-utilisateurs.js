@@ -25,7 +25,15 @@ const DE_COLORE = 'R', DE_BLANC = 'W';     // DC<n>_<couleur>.png du module
 // s'exécute dans son navigateur. Le contrôle évite les regards
 // distraits, pas la triche — il faudrait un serveur pour cela.
 const NOM_ADMIN = 'Administrateur';
-const ADMIN_MDP = 'Glorantha';
+// Le mot de passe administrateur n'est pas dans le code : seulement son
+// empreinte (_empreinte, FNV-1a), à laquelle on compare celle de la
+// saisie. Cela empêche de le lire dans le dépôt publié, rien de plus :
+// quiconque modifie le JavaScript chez lui se donne les droits
+// d'administrateur, et une empreinte de 32 bits se retrouve par essais.
+// Une vraie protection demanderait un arbitre de confiance, hors de
+// portée d'une PWA sans serveur.
+const ADMIN_EMPREINTE = 'c1e00cff';
+const estMdpAdmin = mdp => _empreinte(mdp) === ADMIN_EMPREINTE;
 let _utilisateur = null;              // {nom, mdp} ; null = observateur
 let _admin = false;
 
@@ -91,7 +99,7 @@ function demasquable(p){
   const autrui = id => !!id && id !== 'web' && !voitMasque(id);
   return !autrui(p.hipProprio) && !autrui(p.compteurProprio);
 }
-const _cmdDemasque = p => { const te = _typeEtEtat(p.seg); return te ? commandesDe(te.type).cmds.find(c => c.demasque) : null; };
+const _cmdDemasque = p => { const te = tePion(p); return te ? commandesDe(te.type).cmds.find(c => c.demasque) : null; };
 
 const CLE_COMPTES = 'aslweb.comptes';
 const CLE_DERNIER = 'aslweb.dernierUtilisateur';
@@ -204,7 +212,7 @@ const campDeNation = n => NATIONS_AXE.has(n) ? 'axe' : NATIONS_ALLIES.has(n) ? '
 function nationPion(p){
   const m = infoDissimulation(p);
   if(m.nation) return m.nation;
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return null;
   for(const t of decoderTraits(te.type)){
     const r = /^prototype;([a-z]{2})[A-Z0-9(]/.exec(t);
@@ -337,7 +345,7 @@ function deplacerAuDoigt(liste, x, y){
 // prouve l'identité.
 //   · joueur du fichier : son mot de passe est l'identifiant de ses masques
 //   · compte du poste   : comparé à l'empreinte enregistrée
-//   · administrateur    : ADMIN_MDP
+//   · administrateur    : comparé à ADMIN_EMPREINTE
 const _esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 
 function demanderUtilisateur(){
@@ -412,7 +420,7 @@ function demanderUtilisateur(){
   $('utOk').onclick = () => {
     const e = entrees[+sel.value], mdp = $('utMdp').value;
     if(e.type === 'admin'){
-      if(mdp !== ADMIN_MDP){ err.textContent = 'Mot de passe administrateur incorrect.'; return; }
+      if(!estMdpAdmin(mdp)){ err.textContent = 'Mot de passe administrateur incorrect.'; return; }
       _ecrireLocal(CLE_DERNIER, NOM_ADMIN);
       w.remove();
       seConnecter(null, true);
@@ -421,7 +429,7 @@ function demanderUtilisateur(){
     if(!mdp){ err.textContent = 'Saisir le mot de passe.'; return; }
     const camp = $('utCamp').value;
     if(!CAMPS[camp]){ err.textContent = 'Choisir le camp.'; $('utCamp').focus(); return; }
-    if(mdp === ADMIN_MDP || mdp === 'web' || mdp === 'admin'){ err.textContent = 'Ce mot de passe est réservé.'; return; }
+    if(estMdpAdmin(mdp) || mdp === 'web' || mdp === 'admin'){ err.textContent = 'Ce mot de passe est réservé.'; return; }
     if(e.type === 'nouveau'){
       const nom = $('utNom').value.trim();
       if(!nomValide(nom)){ err.textContent = 'Nom requis : 24 caractères au plus, sans ; / \\ , < > & ".'; return; }

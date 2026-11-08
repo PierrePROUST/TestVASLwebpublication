@@ -82,9 +82,9 @@ function _piecesLOS(){
   for(const p of vivants()){
     if(p.cache || p.outil || p.ovrExtPose) continue;
     if(p.masqueProprio && !voitMasque(p.masqueProprio)) continue;
-    if(p._losSeg !== p.seg){
-      const ts = _developperPrototypes(_splitTypeState(p.seg), 0), pr = _proprietes(ts);
-      p._losSeg = p.seg;
+    if(!memeEtat(p._losSeg, p)){
+      const ts = tsPion(p), pr = _proprietes(ts);
+      p._losSeg = empreinteEtat(p);
       p._losPr = {hindrance: 'Hindrance' in pr, overlay: 'overlay' in pr, deplace: !!_deplace(ts)};
     }
     const c = _versLOS(p), d = Object.assign({nom: p.nom || '', x: c.x, y: c.y, ordre: p.ordre}, p._losPr);
@@ -614,7 +614,7 @@ function _zonesOverlay(){
   }
   for(const p of vivants()){
     if(p.cache || p.ovrExtPose) continue;
-    if(p._overlay === undefined) p._overlay = 'overlay' in _proprietes(_developperPrototypes(_splitTypeState(p.seg), 0));
+    if(p._overlay === undefined) p._overlay = 'overlay' in _proprietes(tsPion(p));
     if(!p._overlay) continue;
     const w = (p.larg || p.sz) / SC / _losZoom(), h = (p.haut || p.sz) / SC / _losZoom(), c = _versLOS(p);
     z.push({x: c.x - w/2, y: c.y - h/2, w, h});
