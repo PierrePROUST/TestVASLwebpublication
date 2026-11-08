@@ -56,7 +56,9 @@ function _commandesLog(tok){
 function _instantane(){
   return {info: _infoEtat, piles: new Map(_pilesVassal), liens: new Map(_liens), oba: _oba.map(m => ({...m})),
           glob: new Map(_globConnu), globales: Object.assign({}, _globales),
-          pions: pions.map(p => ({p, seg: p.seg, x: p.x, y: p.y, ordre: p.ordre, deleted: p.deleted, ailleurs: p.ailleurs}))};
+          // L'ÉTAT seulement (et la référence du TYPE) : pas de segment
+          // recomposé gardé coup après coup.
+          pions: pions.map(p => ({p, typeRef: p.typeRef, etat: p.etat, _seg: p._seg, x: p.x, y: p.y, ordre: p.ordre, deleted: p.deleted, ailleurs: p.ailleurs}))};
 }
 
 function _restaurer(snap){
@@ -66,8 +68,8 @@ function _restaurer(snap){
   pions = snap.pions.map(e => e.p);
   for(const e of snap.pions){
     const p = e.p;
-    const segChange = p.seg !== e.seg;
-    Object.assign(p, {seg: e.seg, x: e.x, y: e.y, ordre: e.ordre, deleted: e.deleted, ailleurs: e.ailleurs});
+    const segChange = p.typeRef !== e.typeRef || p.etat !== e.etat || p._seg !== e._seg;
+    Object.assign(p, {typeRef: e.typeRef, etat: e.etat, _seg: e._seg, x: e.x, y: e.y, ordre: e.ordre, deleted: e.deleted, ailleurs: e.ailleurs});
     if(p.deleted) p.el.remove();
     else if(!p.el.isConnected) document.getElementById('mapInner').appendChild(p.el);
     if(segChange && !p.deleted) majApparence(p);
@@ -146,7 +148,7 @@ function _ciblesEtape(segs){
         const t = _champsD(s.substring(2));
         if(piles.has(t[0])){ if(t[1]) piles.set(t[0], _idsPile(t[1])); continue; }
         const p = surCarte(_nul(t[0]));
-        const te = p && t[1] && _typeEtEtat(p.seg);
+        const te = p && t[1] && tePion(p);
         if(!te) continue;
         const d = lirePiece('+/' + p.uid + '/' + te.type + '/' + t[1]);
         if(d.carte === _carteJeu && (d.x !== p.x || d.y !== p.y)) arrives.push({x: d.x, y: d.y});
@@ -268,7 +270,7 @@ function allerLog(cible){
 // État visible des pions avant un coup, pour savoir ce qu'il a changé.
 // Les pions HIP ne comptent pas : la vue ne doit pas les trahir.
 function _photo(){
-  return new Map(vivants().filter(p => !p.cache).map(p => [p, {x: p.x, y: p.y, seg: p.seg}]));
+  return new Map(vivants().filter(p => !p.cache).map(p => [p, {x: p.x, y: p.y, etat: empreinteEtat(p)}]));
 }
 
 // Rayon, en hexagones, de la zone montrée autour d'une action.
@@ -280,7 +282,7 @@ function signalerCoup(photo, sansCadrer){
   // Arrivées : pions déplacés ou posés. Retraits : pions disparus, montrés
   // un instant à leur ancienne place. Sinon, simples changements d'état.
   const arrives = ici.filter(p => { const a = photo.get(p); return !a || a.x !== p.x || a.y !== p.y; });
-  const modifies = ici.filter(p => { const a = photo.get(p); return a && a.x === p.x && a.y === p.y && a.seg !== p.seg; });
+  const modifies = ici.filter(p => { const a = photo.get(p); return a && a.x === p.x && a.y === p.y && !memeEtat(a.etat, p); });
   const encore = new Set(ici);
   const retires = [...photo.keys()].filter(p => !encore.has(p));
   for(const p of [...arrives, ...modifies]){
@@ -332,10 +334,10 @@ function majBarreLog(){ rafraichirActions(['relecture', 'relectureRail', 'relect
 // de la piste des tours. VASSAL ne la met dans aucune pile.
 const _nonEmpilable = new Map();      // type → booléen
 function neSEmpilePas(p){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return false;
   if(!_nonEmpilable.has(te.type) || !_bdd){
-    const ts = _developperPrototypes(_splitTypeState(p.seg), 0);
+    const ts = tsPion(p);
     const im = ts && ts.typ.map(t => _seq(t.replace(/\\+$/, ''), ';')).find(f => f[0] === 'immob');
     const v = !!im && (im[3] === undefined ? 'R' : im[3].replace(/\\/g, '')).charAt(0) !== 'L';
     if(!_bdd) return v;
@@ -446,7 +448,7 @@ function editerLabel(p, i, titre, lot){
   const cibles = [{p, i}];
   if(lot) lot.label = {cibles};
   fermerEditeurLabel();
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   const actuel = te ? _texteLabel(decoderTraits(te.etat)[i]) : '';
   const box = document.createElement('div');
   box.id = 'editLabel'; box.className = 'editLabel';
@@ -499,14 +501,14 @@ function fermerEditeurLabel(){
 // Change l'état d'un trait d'un pion, avec son « D/ ».
 function fixerTrait(p, i, valeur){
   if(!p || p.deleted) return false;
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return false;
   const S = decoderTraits(te.etat);
   if(S[i] === valeur) return false;
   S[i] = valeur;
   _avantAction();
   const neuf = encoderTraits(S);
-  p.seg = '+/' + p.uid + '/' + te.type + '/' + neuf;
+  fixerEtat(p, neuf);
   _logCmd(`D/${p.uid}/${neuf}/${te.etat}`);
   majApparence(p);
   return true;

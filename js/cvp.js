@@ -69,7 +69,7 @@ function _compter(c, liste){
     _globales[c.prop] = '0';
     for(const p of liste){
       if(!p.deleted || p.ailleurs !== c.carte) continue;
-      const te = _typeEtEtat(p.seg);
+      const te = tePion(p);
       if(!te) continue;
       const S = decoderTraits(te.etat);
       const {cmds, T} = commandesDe(te.type);
@@ -160,7 +160,7 @@ const binOuvert = () => _tablesOuvertes() && _surOngletBin();
 const basculerBin = () => _basculerOnglet(_ongletBin, binOuvert, '.ongletBin', 'Casualties');
 
 const _zonesBin = carte => [...(_bdd ? _bdd.zones.values() : [])].filter(z => z.carte === carte);
-const _zoneDuPion = p => { const d = lirePiece(p.seg); return _zoneDe(p.ailleurs, d.x, d.y); };
+const _zoneDuPion = p => { const d = lirePiece(p); return _zoneDe(p.ailleurs, d.x, d.y); };
 const _compteurDe = (carte, zone) => (_bdd.compteurs || []).find(c => c.carte === carte && c.filtre.includes('"' + zone + '"'));
 // Pions du bin, du sommet au fond.
 const _pionsBin = carte => pions.filter(p => p.deleted && p.ailleurs === carte).sort((a, b) => b.ordre - a.ordre);
@@ -275,7 +275,7 @@ function _ligneBin(p, c, zones, zone, colonnes, boite){
 // sinon celle que garde son trait SendToLocation (« carte;x;y »).
 function _retourDe(p){
   if(p.retour) return p.retour;
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return null;
   const T = decoderTraits(te.type), S = decoderTraits(te.etat);
   for(let i = 0; i < T.length; i++){
@@ -303,7 +303,7 @@ function remettreDuBin(p, x, y){
   if(x === undefined){ const r = _retourDe(p) || _placeAuCentre(); if(!r) return; x = r.x; y = r.y; }
   if(surTables(x, y)){ chatLog('⛔ Pas de pion sur les tables QRDC : rien déplacé'); return; }
   _avantAction();
-  const d = lirePiece(p.seg), carte = p.ailleurs;
+  const d = lirePiece(p), carte = p.ailleurs;
   const pos = positionDepot(x, y), k = pos.x + ',' + pos.y;
   const haut = Math.max(-1, ...pile(k).map(q => q.ordre));
   p.deleted = false; p.ailleurs = null; p.retour = null;
@@ -322,11 +322,11 @@ function remettreDuBin(p, x, y){
 // Le pion passe dans une autre zone du bin, au centre, comme son envoi.
 function changerZoneBin(p, z){
   if(!p.deleted || p.ailleurs !== z.carte || refuser(p)) return;
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return;
   _avantAction();
-  const d = lirePiece(p.seg);
-  p.seg = '+/' + p.uid + '/' + te.type + '/' + _majPosEtat(te.etat, z.carte, z.x, z.y);
+  const d = lirePiece(p);
+  fixerEtat(p, _majPosEtat(te.etat, z.carte, z.x, z.y));
   p.ordre = Math.max(-1, ..._pionsBin(z.carte).filter(q => q !== p && _zoneDuPion(q) === z.nom).map(q => q.ordre)) + 1;
   _logCmd(`M/${p.uid}/${z.carte}/${z.x}/${z.y}/null/${z.carte}/${d.x}/${d.y}/null/${joueur()}`);
   chatLog(`📤 ${nomRapport(p)} → ${z.nom}`);

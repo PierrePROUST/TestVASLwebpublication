@@ -95,7 +95,7 @@ function proprietesPion(p, T, S){
   pr.BasicName = pr.PieceName = p.nom;
   pr.CurrentMap = pr.OldMap = p.ailleurs || _carteJeu;
   // Zone d'une pièce tenue sur une autre fenêtre (« Axis Casualties »).
-  if(p.ailleurs){ const d = lirePiece(p.seg), z = _zoneDe(p.ailleurs, d.x, d.y); if(z) pr.CurrentZone = z; }
+  if(p.ailleurs){ const d = lirePiece(p), z = _zoneDe(p.ailleurs, d.x, d.y); if(z) pr.CurrentZone = z; }
   pr.PlayerName = pr.PlayerSide = joueur();
   return pr;
 }
@@ -564,7 +564,7 @@ function executerTouche(p, touche, cmdDirecte, lot){
   const k = touche || (cmdDirecte && cmdDirecte.touche);
   if(accesRefuse(p) && !accesRefuse(p, k)){ dissimuler(p); return true; }
   if(refuser(p, k)) return false;
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return false;
   const S = decoderTraits(te.etat);
   const avant = S.join('\x00');
@@ -587,7 +587,7 @@ function executerTouche(p, touche, cmdDirecte, lot){
   if(S.join('\x00') !== avant){
     _avantAction();
     const neuf = encoderTraits(S);
-    p.seg = '+/' + p.uid + '/' + te.type + '/' + neuf;
+    fixerEtat(p, neuf);
     _logCmd(`D/${p.uid}/${neuf}/${te.etat}`);
     majApparence(p);
     // Un véhicule qui tourne paie ses MP de VCA (D2.11).

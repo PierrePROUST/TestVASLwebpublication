@@ -66,10 +66,10 @@ function basculerRepere(q){
 
 function _estBrise(p){
   if(p.nom === 'DM' || p.nom === 'Disrupt') return true;
-  const d = lirePiece(p.seg);
+  const d = lirePiece(p);
   if(d.hip || d.masque) return false;
   let pr = {};
-  try { pr = _proprietes(_developperPrototypes(_splitTypeState(p.seg), 0)) || {}; } catch(e){}
+  try { pr = _proprietes(tsPion(p)) || {}; } catch(e){}
   return pr.BRK_Active === 'true';
 }
 // Le nom que voit ce joueur : un pion masqué par un autre ne se trahit pas.

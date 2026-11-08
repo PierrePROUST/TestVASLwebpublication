@@ -5,7 +5,7 @@
 
 // Ce que les traits d'un pion disent de la dissimulation.
 function infoDissimulation(p){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return {};
   const T = decoderTraits(te.type), S = decoderTraits(te.etat);
   for(let i = 0; i < T.length; i++){
@@ -24,13 +24,13 @@ function infoDissimulation(p){
 // niveau de bâtiment, pont…) : propriété separateLocation. Un « ? » ne
 // dissimule rien sous lui (Concealment.keyEvent, Concealable).
 function _lieuSepare(p){
-  const ts = _developperPrototypes(_splitTypeState(p.seg), 0);
+  const ts = tsPion(p);
   return !!ts && ts.typ.some(t => /^mark;separateLocation(;|$)/.test(t.replace(/\\/g, '')));
 }
 
 // Masque (`qui` = joueur) ou démasque (null) une unité, avec son « D/ ».
 function fixerMasque(p, qui){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   const m = infoDissimulation(p);
   if(!te || !m.unite) return false;
   const S = decoderTraits(te.etat);
@@ -40,7 +40,7 @@ function fixerMasque(p, qui){
   const neuf = encoderTraits(S);
   if(neuf === te.etat) return false;
   _avantAction();
-  p.seg = '+/' + p.uid + '/' + te.type + '/' + neuf;
+  fixerEtat(p, neuf);
   _logCmd(`D/${p.uid}/${neuf}/${te.etat}`);
   majApparence(p);
   return true;
@@ -189,7 +189,7 @@ function _qmarkPourPartants(liste, kArr, sousQ){
 
 // Clone.myKeyEvent : la copie rejoint la pile par placeOrMerge, au sommet.
 function cloner(p){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return null;
   const q = poserTraits(decoderTraits(te.type), decoderTraits(te.etat), p.x, p.y, p, 0);
   chatLog(`➕ ${p.nom} cloné`);
@@ -201,7 +201,7 @@ function cloner(p){
 // toujours par commander().
 //   item : {nom, touche, cmd, grise} ou sous-menu {nom, items}
 function arbreCommandes(p){
-  const te = _typeEtEtat(p.seg);
+  const te = tePion(p);
   if(!te) return null;
   const {cmds, sousMenus, T} = commandesDe(te.type);
   // Restrictions (hideCmd) en vigueur : elles visent les commandes des
@@ -469,7 +469,7 @@ function ciblesTouche(touche, nom){
   const base = _sel.size ? [..._sel] : (_pileSel ? pile(_pileSel).filter(p => !p.cache) : []);
   return trierParPile(base.filter(p => !p.cache && _aCommande(p, touche, nom)));
 }
-const _aCommande = (p, touche, nom) => commandesDe((_typeEtEtat(p.seg) || {}).type || '')
+const _aCommande = (p, touche, nom) => commandesDe((tePion(p) || {}).type || '')
   .cmds.some(c => c.touche === touche && (nom == null || c.nom === nom));
 // Comme un raccourci clavier de VASSAL : la touche part à toute la
 // sélection. Les pions masqués par un autre joueur ne la reçoivent pas ;
@@ -491,7 +491,7 @@ function commander(pions, touche, cmdDirecte){
   const k = touche || (cmdDirecte && cmdDirecte.touche);
   let invites = [], S = null;
   for(const p of pions){
-    const te = _typeEtEtat(p.seg);
+    const te = tePion(p);
     if(!te || !k) continue;
     invites = commandesDe(te.type).cmds.filter(c => c.invite && c.touche === k).map(c => c.invite);
     if(invites.length){ S = decoderTraits(te.etat); break; }
