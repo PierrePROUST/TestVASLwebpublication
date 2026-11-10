@@ -1,9 +1,9 @@
 {
-  "name": "ASLwebtest",
-  "short_name": "ASLwebtest",
+  "name": "Vaslwebtest",
+  "short_name": "Vaslwebtest",
   "description": "Carte VASL dans le navigateur : ouvrir, jouer et relire des parties .vsav / .vlog.",
   "lang": "fr",
-  "id": "./",
+  "id": "/TestVASLwebpublication/",
   "start_url": "./VASLweb.html",
   "scope": "./",
   "display": "standalone",
