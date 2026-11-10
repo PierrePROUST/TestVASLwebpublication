@@ -17,7 +17,7 @@
 // prenne jamais un script de la version d'avant dans un cache HTTP.
 // APP : tout fichier de l'application (le script de publication refuse
 // une page qui charge un .js ou un .css absent de cette liste).
-const VERSION = '872177f';
+const VERSION = '5b048a0';
 const CACHE_APP = 'vaslweb-app-' + VERSION;
 // Nom fixe ; « -v1 » garde le cache des boards des versions d'avant.
 const CACHE_VASL = 'vaslweb-vasl-v1';
@@ -31,40 +31,40 @@ const APP = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
-  './pwa.js?v=872177f',
-  './css/vaslweb.css?v=872177f',
-  './js/outils.js?v=872177f',
-  './js/donnees/ssr.js?v=872177f',
-  './js/donnees/overlays-ext.js?v=872177f',
-  './js/donnees/mouvement.js?v=872177f',
-  './js/langue.js?v=872177f',
-  './js/noyau.js?v=872177f',
-  './js/fichiers.js?v=872177f',
-  './js/carte.js?v=872177f',
-  './js/hexagones.js?v=872177f',
-  './js/los-moteur.js?v=872177f',
-  './js/los-pions.js?v=872177f',
-  './js/los-fil.js?v=872177f',
-  './js/pieces.js?v=872177f',
-  './js/pions.js?v=872177f',
-  './js/vlog.js?v=872177f',
-  './js/mf.js?v=872177f',
-  './js/commandes.js?v=872177f',
-  './js/chat-rapports.js?v=872177f',
-  './js/flare.js?v=872177f',
-  './js/cvp.js?v=872177f',
-  './js/dissimulation.js?v=872177f',
-  './js/tactile.js?v=872177f',
-  './js/bdd.js?v=872177f',
-  './js/qrdc.js?v=872177f',
-  './js/oba.js?v=872177f',
-  './js/des-utilisateurs.js?v=872177f',
-  './js/ift.js?v=872177f',
-  './js/reseau.js?v=872177f',
-  './js/export.js?v=872177f',
-  './js/interface.js?v=872177f',
-  './js/chat.js?v=872177f',
-  './js/menus.js?v=872177f'
+  './pwa.js?v=5b048a0',
+  './css/vaslweb.css?v=5b048a0',
+  './js/outils.js?v=5b048a0',
+  './js/donnees/ssr.js?v=5b048a0',
+  './js/donnees/overlays-ext.js?v=5b048a0',
+  './js/donnees/mouvement.js?v=5b048a0',
+  './js/langue.js?v=5b048a0',
+  './js/noyau.js?v=5b048a0',
+  './js/fichiers.js?v=5b048a0',
+  './js/carte.js?v=5b048a0',
+  './js/hexagones.js?v=5b048a0',
+  './js/los-moteur.js?v=5b048a0',
+  './js/los-pions.js?v=5b048a0',
+  './js/los-fil.js?v=5b048a0',
+  './js/pieces.js?v=5b048a0',
+  './js/pions.js?v=5b048a0',
+  './js/vlog.js?v=5b048a0',
+  './js/mf.js?v=5b048a0',
+  './js/commandes.js?v=5b048a0',
+  './js/chat-rapports.js?v=5b048a0',
+  './js/flare.js?v=5b048a0',
+  './js/cvp.js?v=5b048a0',
+  './js/dissimulation.js?v=5b048a0',
+  './js/tactile.js?v=5b048a0',
+  './js/bdd.js?v=5b048a0',
+  './js/qrdc.js?v=5b048a0',
+  './js/oba.js?v=5b048a0',
+  './js/des-utilisateurs.js?v=5b048a0',
+  './js/ift.js?v=5b048a0',
+  './js/reseau.js?v=5b048a0',
+  './js/export.js?v=5b048a0',
+  './js/interface.js?v=5b048a0',
+  './js/chat.js?v=5b048a0',
+  './js/menus.js?v=5b048a0'
 ];
 const HOTES_VASL = ['raw.githubusercontent.com', 'unpkg.com'];
 
@@ -90,7 +90,11 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
     .then(cles => Promise.all(cles.filter(k => k.startsWith('vaslweb-app-') && k !== CACHE_APP)
       .map(async k => { if(await aMoi(k)) await caches.delete(k); })))
-    .then(() => self.clients.claim()));
+    .then(() => self.clients.claim())
+    // Les pages ouvertes apprennent la version active : pwa.js propose de
+    // recharger celles d'une version d'avant.
+    .then(() => self.clients.matchAll({type: 'window'}))
+    .then(pages => pages.forEach(p => p.postMessage({vaslweb: VERSION}))));
 });
 
 async function reseauDabord(req, cache, cle = req){
