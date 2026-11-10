@@ -214,6 +214,7 @@ body[data-terminal=tactile]{--cible:44px}
 #fenLOS .cadreImageLOS{display:flex;justify-content:center;margin:0 0 6px}
 #fenLOS .imageLOS{max-width:100%;height:auto!important;border:1px solid var(--bord);border-radius:4px}
 #fenLOS .legendeLOS{font-size:12px;color:var(--menu-doux)}
+#fenLOS .pastilleLOS{display:inline-block;width:14px;height:4px;vertical-align:middle;border:1px solid #000}
 .panneauFil .act.bouton.boutFil.vise{border-color:var(--accent);background:rgba(217,164,65,.25);color:#fff}
 .panneauFil.vertical{flex-direction:column;flex-wrap:nowrap;align-items:stretch;overflow-x:hidden;overflow-y:auto}
 .panneauFil.vertical .teteFil{flex-direction:row;border-bottom:1px solid var(--bord);padding-bottom:4px}
@@ -240,6 +241,9 @@ body:not([data-terminal=pc]) .fenetre{left:0;top:0;transform:none;width:100%;hei
 body:not([data-terminal=pc]) .fenetre .fb button{min-height:44px}
 body:not([data-terminal=pc]) .fenetre label.coche{min-height:44px;font-size:15px}
 body:not([data-terminal=pc]) .fenetre label.coche input{width:22px;height:22px}
+body:not([data-terminal=pc]) .fenPrefs input[type=color]{width:56px;height:40px}
+body:not([data-terminal=pc]) .fenPrefs label.coulPref{font-size:15px}
+body:not([data-terminal=pc]) .fenPrefs .ongletsPref button{min-height:44px}
 /* Au doigt, Safari iOS zoome la page sur tout champ de moins de 16 px :
    chat, recherches, SAN, palette de commandes compris. */
 body:not([data-terminal=pc]) :is(input:not([type=checkbox]):not([type=radio]),select,textarea){font-size:16px!important}
@@ -501,6 +505,19 @@ body:not([data-terminal=pc]) #chatEnvoi{display:block;min-width:44px;min-height:
 #fenLog{z-index:9900}
 .fenetre .fnote{margin:10px 0 0;font-size:11px;color:var(--menu-doux)}
 .fenetre table{width:100%;border-collapse:collapse;margin-bottom:6px}
+/* Préférences (⚙) : onglets comme ceux des Preferences de VASSAL. */
+.fenPrefs{width:min(92vw,420px)}
+.fenPrefs .ongletsPref{display:flex;gap:2px;border-bottom:1px solid var(--menu-bord);margin-bottom:10px}
+.fenPrefs .ongletsPref button{flex:none;background:transparent;border:1px solid transparent;border-bottom:none;
+  border-radius:4px 4px 0 0;padding:5px 12px;color:var(--menu-doux)}
+.fenPrefs .ongletsPref button.actif{background:var(--champ);border-color:var(--menu-bord);color:var(--menu-texte)}
+.fenPrefs label.coulPref{flex-direction:row;align-items:center;gap:8px}
+.fenPrefs input[type=color]{width:44px;height:28px;padding:0 2px;flex:none}
+.fenPrefs small{color:var(--menu-doux);font-size:11px}
+.fenPrefs .apercuLOS{display:flex;height:6px;margin:4px 0 2px;border:1px solid #000}
+.fenPrefs .apercuLOS span{flex:1}
+.fenPrefs .exMvt{margin:-6px 0 10px 26px;font-family:monospace}
+.fenPrefs .pagePref .fb{margin-bottom:10px}
 .fenetre th{text-align:left;border-bottom:1px solid var(--menu-bord);padding:3px}
 .fenetre td{padding:3px;border-bottom:1px solid #3a3a3a}
 .fenetre td.nb{text-align:right}
@@ -655,7 +672,7 @@ body.maj .pion.immob{pointer-events:auto}
 /* Fil de visée (VASLThread) : calque du fil, étiquettes noires de taille
    fixe à l'écran, pions transparents pendant la visée. */
 #mapWrap.visee{cursor:crosshair}
-#mapInner.losActif .pion{opacity:.33}
+#mapInner.losActif .pion{opacity:var(--los-opacite,.33)}
 /* « ? » vu par son propriétaire (ou l'administrateur) : translucide, il
    laisse voir les unités qu'il dissimule dessous (Concealment de VASL). */
 .pion.qTransparent{opacity:.45}

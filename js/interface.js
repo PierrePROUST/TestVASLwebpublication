@@ -137,10 +137,14 @@ const ACTIONS = {
   los:      {lib: 'LOS (ligne de vue)', court: 'L', img: ICONE_LOS, lettre: true, touche: 'F10',
              faire: (ancre, e) => armerFil(e && e.ctrlKey && e.shiftKey ? 'l' : 'L'), allume: () => !!_filArme,
              // Au doigt, un appui long propose la LOS silencieuse et le mode détaillé.
-             menuLong: ['los', 'losMuet', 'verbeux']},
+             menuLong: ['los', 'losMuet', 'verbeux', 'prefLOS']},
   losMuet:  {lib: 'LOS inv (ligne de vue silencieuse)', court: 'l', img: ICONE_LOS, lettre: true, touche: 'Ctrl+Maj+F10',
              faire: () => armerFil('l'), allume: () => _filArme === 'l'},
   verbeux:  {ico: '📝', lib: 'LOS détaillée (Verbose LOS mode)', coche: () => _losVerbeux, faire: basculerVerbeux},
+  // Préférences de VASSAL (roue crantée) : couleurs du fil de la LOS,
+  // décompte des MF et des MP (js/preferences.js).
+  preferences: {lib: 'Préférences (LOS, décompte MF / MP)…', court: 'Préférences', ico: '⚙', faire: () => ouvrirPreferences()},
+  prefLOS:  {lib: 'Préférences de la LOS (couleurs)…', court: 'Préférences', ico: '⚙', faire: () => ouvrirPreferences('los')},
   zoomMoins:{lib: 'Zoom arrière', ico: '−', faire: zoomOut},
   zoomPlus: {lib: 'Zoom avant', ico: '+', faire: zoomIn},
   zoomTxt:  {etiquette: () => Math.round(zoom * 100) + ' %', classe: 'zoom'},
@@ -431,19 +435,19 @@ function choisirProfil(p){
 const DISPOSITIONS = {
   pc: {
     menus: {
-      'Fichier':   ['ouvrir', 'vsav', '-', 'log'],
+      'Fichier':   ['ouvrir', 'vsav', '-', 'log', '-', 'preferences'],
       'Partie':    ['undo', '-', 'unmoved', 'all', '-', 'brises', 'sniper', '-', 'infoScenario'],
       // Masqués à la demande : sélection des cartes et panneaux, effectif
       // des piles, LOS détaillée (toujours au clic droit sur le bouton LOS).
       'Affichage': ['zoomPlus', 'zoomMoins', 'ajuster', 'zoom100', '-', 'rotDroite', 'rotGauche', 'rot180', 'rot0', '-', 'masquer', 'tables', '-', 'couche_unite', 'couche_marqueur',
                     'couche_overlay', '-', 'pions', 'journal', '-', 'profil_auto', 'profil_pc', 'profil_tactile'],
-      'Outils':    ['los', 'losMuet', '-', 'oba', 'bin'],
+      'Outils':    ['los', 'losMuet', 'prefLOS', '-', 'oba', 'bin'],
       'Dés':       [...DES.map(d => d.id), '-', 'infoScenario'],
       'Réseau':    ['reseau', 'utilisateur'],
       'Aide':      ['raccourcis']
     },
     barre: ['ouvrir', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'rotGauche', 'rotDroite',
-            '|', 'relecture', 'los', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', '|', 'pions', '|', 'reseau', 'utilisateur'],
+            '|', 'relecture', 'los', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', '|', 'pions', '|', 'reseau', 'utilisateur', '|', 'preferences'],
     // Les dés restent à portée, en boutons sous la barre d'icônes.
     barreDes: [...DES.filter(d => d.id.startsWith('DR_')).map(d => d.id), '|', ...DES.filter(d => d.id.startsWith('dr_')).map(d => d.id)],
     // Ni onglet Pile ni onglet Dés : la pile se gère comme au doigt
@@ -660,7 +664,7 @@ function placerColonne(c){
 // La sélection des overlays reste : sans elle, un overlay posé ne pourrait
 // plus être ni déplacé ni retiré au doigt.
 const PLUS = ['ouvrir', 'vsav', 'log', '-', 'los', 'losMuet', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'couche_overlay', '-', 'rotDroite', 'rot180', '-', 'reseau', 'utilisateur', '-',
-  'sanPieges', '-', 'profil_pc'];
+  'sanPieges', '-', 'preferences', 'profil_pc'];
 // Dans la feuille « Plus », mais pas dans la colonne d'icônes.
 const PLUS_SANS_ICONE = ['profil_pc', 'reseau', 'utilisateur'];
 function ouvrirFeuillePlus(){ return ouvrirFeuilleActions('Plus', PLUS, 'feuillePlus'); }
