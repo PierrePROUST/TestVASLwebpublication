@@ -140,6 +140,7 @@ const EN = {
     'A move was made here during replay: Undo to cancel it',
   'Plus…': 'More…', 'Plus': 'More', 'Carte': 'Map',
   'Aperçu du chat sur la carte': 'Chat preview on the map',
+  'Dés en 3D sur la carte': '3D dice on the map',
   'Dés : un appui DR, un appui long les catégories': 'Dice: tap for a DR, long press for categories',
   'SAN et pièges…': 'SAN and Booby Traps…', 'SAN et pièges': 'SAN and Booby Traps',
   'Pile et palette': 'Stack and counters', 'Vues': 'Views',
