@@ -700,3 +700,9 @@ body.maj .pion.immob{pointer-events:auto}
 .barreQC .qcTri{position:absolute;right:2px;bottom:2px;height:auto;pointer-events:none}
 .menuQC .it .mini{flex:none}
 .menuQC .it{cursor:grab}
+/* Barre QC de l'affichage tactile : en haut, défilante sans fin. */
+.barreQCT.navBas{border-top:none;border-bottom:1px solid var(--bord);padding-top:2px;padding-bottom:2px;scroll-snap-type:none}
+#chromeHaut > .barreQCT:first-child{padding-top:calc(var(--marge-h) + 2px)}
+.barreQCT .act.rail.qc{position:relative;flex:0 0 46px;width:46px;height:46px;cursor:default}
+.barreQCT .qcTri{position:absolute;right:3px;bottom:3px;height:auto!important;pointer-events:none}
+.qcLigne .mini{flex:none}
