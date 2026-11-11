@@ -59,6 +59,7 @@ const APP = [
   './js/qrdc.js?v=455eca0',
   './js/oba.js?v=455eca0',
   './js/des-utilisateurs.js?v=455eca0',
+  './js/des-3d.js?v=455eca0',
   './js/ift.js?v=455eca0',
   './js/reseau.js?v=455eca0',
   './js/export.js?v=455eca0',
