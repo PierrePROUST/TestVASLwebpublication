@@ -701,9 +701,11 @@ function ouvrirFeuilleDes(){
 DISPOSITIONS.tactile = {
   panneau: ['pile', 'palette'],
   construire(){
-    // Pas de barre en haut : tout passe par la colonne d'icônes de droite ;
+    // En haut, la seule barre QC ; le reste passe par la colonne d'icônes ;
     // l'aperçu du chat se place en haut ou en bas, au choix.
     document.getElementById(_posApercu === 'haut' ? 'chromeHaut' : 'chromeBas').appendChild(_construireApercuChat());
+    // La barre QC de VASL, en haut de l'écran, défilante comme la colonne.
+    document.getElementById('chromeHaut').appendChild(construireBarreQCTactile());
     const nav = document.createElement('nav');
     nav.className = 'navBas navGauche';
     nav.setAttribute('aria-label', 'Vues');

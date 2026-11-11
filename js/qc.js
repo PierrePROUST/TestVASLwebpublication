@@ -22,7 +22,7 @@ const QC_CONFIG = [
   {texte: 'Building Levels', e: ['171', '167', '169', '163', '165', '202', '203', '204']}
 ];
 // Taille des icônes : SizedImageIcon de 30 × 30 dans VASL.
-const QC_ICONE = 30;
+const QC_ICONE = 30, QC_ICONE_TACTILE = 38;
 
 function construireBarreQC(){
   const b = document.createElement('div');
@@ -38,6 +38,39 @@ function construireBarreQC(){
   return b;
 }
 
+// Affichage tactile : la même barre en haut de l'écran, qui défile au
+// doigt sans fin comme la colonne d'icônes : la liste est posée trois
+// fois ; près d'un bout, on saute d'une longueur de liste sans que rien
+// ne bouge à l'écran. Seule la copie du milieu est lue par les lecteurs
+// d'écran. Un appui arme le marqueur (l'appui suivant sur la carte le
+// pose), un appui maintenu puis un glissé le tire sur la carte ; un
+// bouton à sous-menu ouvre la feuille de ses marqueurs.
+function construireBarreQCTactile(){
+  const nav = document.createElement('nav');
+  nav.className = 'navBas barreQCT';
+  nav.setAttribute('aria-label', 'Quick Counters (QC)');
+  chargerBDD().then(bdd => {
+    const debuts = [];
+    for(let copie = 0; copie < 3; copie++) QC_CONFIG.forEach(e => {
+      const el = _boutonQC(e, bdd, true);
+      if(!el) return;
+      if(copie !== 1){ el.setAttribute('aria-hidden', 'true'); el.tabIndex = -1; }
+      if(debuts.length === copie) debuts.push(el);
+      nav.appendChild(el);
+    });
+    if(debuts.length < 3) return;
+    const longueur = () => debuts[2].offsetLeft - debuts[1].offsetLeft;
+    nav.addEventListener('scroll', () => {
+      const L = longueur();
+      if(!L) return;
+      if(nav.scrollLeft < L * 0.5) nav.scrollLeft += L;
+      else if(nav.scrollLeft > L * 1.5) nav.scrollLeft -= L;
+    }, {passive: true});
+    requestAnimationFrame(() => { nav.scrollLeft = longueur(); });
+  }).catch(() => {});
+  return nav;
+}
+
 // Nom d'un pion du sous-menu : GamePiece.getName(), à défaut le nom du slot.
 const _nomQC = x => { try { return lireSlot(x).nom || x.n; } catch(e){ return x.n; } };
 
@@ -50,16 +83,16 @@ function _vignetteQC(x, cote = QC_ICONE){
   return mini;
 }
 
-function _boutonQC(e, bdd){
+function _boutonQC(e, bdd, tactile){
   const menu = typeof e === 'object';
   const slots = menu ? e.e.map(g => bdd.parGpid.get(g)).filter(Boolean) : [];
   const x = menu ? slots[0] : bdd.parGpid.get(e);
   if(!menu && !x) return null;
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'act qc' + (menu ? ' qcMenu' : '');
+  btn.className = 'act qc' + (tactile ? ' rail' : '') + (menu ? ' qcMenu' : '');
   // Sous-menu sans pion : le carré blanc de CreateButtonMenuIcon.
-  const mini = _vignetteQC(x);
+  const mini = _vignetteQC(x, tactile ? QC_ICONE_TACTILE : QC_ICONE);
   if(!x) mini.style.background = '#fff';
   btn.appendChild(mini);
   if(menu){
@@ -71,15 +104,16 @@ function _boutonQC(e, bdd){
     btn.title = e.texte;
     btn.setAttribute('aria-label', e.texte);
     btn.setAttribute('aria-haspopup', 'true');
-    btn._ouvrir = focus => ouvrirMenuQC(btn, e.texte, slots, focus);
+    btn._ouvrir = tactile ? () => ouvrirFeuilleQC(e.texte, slots) : focus => ouvrirMenuQC(btn, e.texte, slots, focus);
     btn.addEventListener('pointerdown', ev => ev.stopPropagation());
     btn.addEventListener('click', ev => {
       ev.stopPropagation();
-      if(_menuOuvert && _menuOuvert.titre === btn) fermerDeroulants(); else btn._ouvrir(ev.detail === 0);
+      if(!tactile && _menuOuvert && _menuOuvert.titre === btn) fermerDeroulants(); else btn._ouvrir(ev.detail === 0);
     });
   } else {
     const nom = _nomQC(x);
-    btn.title = `${nom} — glisser vers la carte, ou cliquer pour le poser sur la pile sélectionnée`;
+    btn.title = tactile ? `${nom} — toucher puis toucher la carte, ou appui maintenu et glisser vers la carte`
+                        : `${nom} — glisser vers la carte, ou cliquer pour le poser sur la pile sélectionnée`;
     btn.setAttribute('aria-label', nom);
     btn.addEventListener('pointerdown', ev => _tirerQC(ev, x, mini));
     // Clavier (Entrée, Espace) : pas de pointerdown, on pose directement.
@@ -123,12 +157,31 @@ function ouvrirMenuQC(btn, titre, slots, focusPremier){
   if(focusPremier) _focusItem(0);
 }
 
+// Le sous-menu au doigt : une feuille du bas, une ligne par marqueur.
+function ouvrirFeuilleQC(titre, slots){
+  const f = ouvrirFeuille({id: 'feuilleQC', titre});
+  for(const x of slots){
+    const it = document.createElement('button');
+    it.type = 'button';
+    it.className = 'act ligne qcLigne';
+    const mini = _vignetteQC(x, QC_ICONE_TACTILE);
+    const lb = document.createElement('span');
+    lb.className = 'lb';
+    lb.textContent = _nomQC(x);
+    it.append(mini, lb);
+    it.addEventListener('pointerdown', ev => _tirerQC(ev, x, mini, () => f.fermer()));
+    it.addEventListener('click', ev => { if(ev.detail === 0){ f.fermer(); _poserQC(x); } });
+    f.corps.appendChild(it);
+  }
+  return f;
+}
+
 // Glissé d'un marqueur QC vers la carte (le DragBuffer de QCButton) ; un
 // simple clic le pose sur la pile sélectionnée, sinon au centre de la vue ;
 // au doigt, il s'arme et l'appui suivant sur la carte le pose.
 function _tirerQC(ev, x, mini, depuisMenu){
   if(ev.button) return;
-  const fermer = () => { if(depuisMenu) fermerDeroulants(); };
+  const fermer = () => { if(typeof depuisMenu === 'function') depuisMenu(); else if(depuisMenu) fermerDeroulants(); };
   glisser(ev, (mini.querySelector('img') || {}).src, 48 * SC * zoom, (cx, cy) => {
     const c = clientVersCarte(cx, cy);
     if(c) poserDepuisPalette(x, c.x, c.y);
