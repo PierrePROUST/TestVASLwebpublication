@@ -182,6 +182,7 @@ const ACTIONS = {
   // Bouton « Casualties Bin » de VASL : les pertes et leurs CVP.
   bin:      {lib: () => 'Casualties Bin — pertes et CVP (onglet des tables QRDC)' + (_cvpAffiche ? ' : ' + _cvpAffiche : ''),
              court: 'Pertes', ico: 'CVP', classe: 'sigle', coche: binOuvert, faire: basculerBin},
+  des3d:    {ico: '🎲', lib: 'Dés en 3D sur la carte', coche: () => _des3d, faire: () => basculerDes3d()},
   effectif: {ico: '🔢', lib: 'Afficher l\'effectif des piles (vue de loin)', coche: () => _effectifPiles, faire: () => basculerEffectif()},
   raccourcis: {lib: 'Raccourcis clavier et gestes…', court: 'Aide', ico: '?', faire: () => aideRaccourcis()},
   couche_unite:    {ico: '👥', lib: 'Sélection : unités', coche: () => COUCHES_SEL.unite, faire: () => basculerCouche('unite')},
@@ -442,7 +443,7 @@ const DISPOSITIONS = {
       'Affichage': ['zoomPlus', 'zoomMoins', 'ajuster', 'zoom100', '-', 'rotDroite', 'rotGauche', 'rot180', 'rot0', '-', 'masquer', 'tables', '-', 'couche_unite', 'couche_marqueur',
                     'couche_overlay', '-', 'pions', 'journal', '-', 'profil_auto', 'profil_pc', 'profil_tactile'],
       'Outils':    ['los', 'losMuet', 'prefLOS', '-', 'oba', 'bin'],
-      'Dés':       [...DES.map(d => d.id), '-', 'infoScenario'],
+      'Dés':       [...DES.map(d => d.id), '-', 'des3d', 'infoScenario'],
       'Réseau':    ['reseau', 'utilisateur'],
       'Aide':      ['raccourcis']
     },
@@ -667,9 +668,9 @@ function placerColonne(c){
 // La sélection des overlays reste : sans elle, un overlay posé ne pourrait
 // plus être ni déplacé ni retiré au doigt.
 const PLUS = ['ouvrir', 'vsav', 'log', '-', 'los', 'losMuet', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'couche_overlay', '-', 'rotDroite', 'rot180', '-', 'reseau', 'utilisateur', '-',
-  'sanPieges', '-', 'preferences', 'profil_pc'];
+  'sanPieges', 'des3d', '-', 'preferences', 'profil_pc'];
 // Dans la feuille « Plus », mais pas dans la colonne d'icônes.
-const PLUS_SANS_ICONE = ['profil_pc', 'reseau', 'utilisateur'];
+const PLUS_SANS_ICONE = ['profil_pc', 'reseau', 'utilisateur', 'des3d'];
 function ouvrirFeuillePlus(){ return ouvrirFeuilleActions('Plus', PLUS, 'feuillePlus'); }
 
 // SAN et pièges : les champs eux-mêmes viennent dans la feuille, et
