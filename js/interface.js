@@ -448,6 +448,8 @@ const DISPOSITIONS = {
     },
     barre: ['ouvrir', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'rotGauche', 'rotDroite',
             '|', 'relecture', 'los', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', '|', 'pions', '|', 'reseau', 'utilisateur', '|', 'preferences'],
+    // La barre QC de VASL (Quick Counters) : marqueurs à tirer sur la carte.
+    barreQC: true,
     // Les dés restent à portée, en boutons sous la barre d'icônes.
     barreDes: [...DES.filter(d => d.id.startsWith('DR_')).map(d => d.id), '|', ...DES.filter(d => d.id.startsWith('dr_')).map(d => d.id)],
     // Ni onglet Pile ni onglet Dés : la pile se gère comme au doigt
@@ -471,6 +473,7 @@ function appliquerProfil(p){
   haut.replaceChildren(); gauche.replaceChildren(); bas.replaceChildren();
   if(d.menus) haut.appendChild(construireMenus(d.menus));
   if(d.barre) haut.appendChild(construireBarre(d.barre, 'barreIcones'));
+  if(d.barreQC) haut.appendChild(construireBarreQC());
   if(d.barreDes) haut.appendChild(construireBarre(d.barreDes, 'barreIcones barreDes'));
   construireOnglets(d.panneau || ['pile', 'palette', 'des']);
   if(d.construire) d.construire();
