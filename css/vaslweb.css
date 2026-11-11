@@ -691,3 +691,12 @@ body.maj .pion.immob{pointer-events:auto}
   animation:flare var(--pulsation) linear var(--pulsations)}
 @keyframes flare{from{width:var(--d);height:var(--d)}to{width:0;height:0}}
 @media (prefers-reduced-motion: reduce){ .flare{animation:none} }
+/* Barre QC de VASL (Quick Counters) : icônes de 30 px, triangle des sous-menus. */
+.barreQC{height:38px;gap:2px}
+.barreQC .act.qc{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:34px;height:34px;padding:1px;min-width:0;cursor:grab}
+.barreQC .act.qcMenu{cursor:pointer}
+.barreQC .act.qc.ouvert{background:var(--menu-survol)}
+.barreQC .qcTri{position:absolute;right:2px;bottom:2px;height:auto;pointer-events:none}
+.menuQC .it .mini{flex:none}
+.menuQC .it{cursor:grab}
