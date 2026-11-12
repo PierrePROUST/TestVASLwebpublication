@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// DÉS EN 3D — un jet roule au centre de la carte
+// DÉS EN 3D — un jet roule du bas vers le haut et s'arrête en haut à
+// droite de la carte
 // Le jet est tiré d'abord (lancerDR, lancerdr, ou reçu d'un autre
 // joueur) ; les dés roulent ensuite et s'arrêtent sur ses faces.
 // L'animation ne change rien au jet, au chat ni au log : un simple
@@ -88,14 +89,15 @@ function animerDes(type, valeurs, legende){
   const duree = 1300;
   des.forEach((d, i) => {
     piste.appendChild(d.de);
-    // Arrivée de la gauche, un peu au-dessus ou au-dessous, en rebondissant.
-    const dy = (Math.random() - .5) * taille * 1.6;
-    const depart = -(r.width / 2 + taille * 2);
+    // Arrivée du bas de l'écran, un peu de biais, jusqu'en haut à droite :
+    // les dés montent, dépassent à peine leur place, puis y retombent.
+    const dx = -(.3 + Math.random() * .9) * taille;
+    const depart = r.height + taille * 2;
     d.de.animate([
-      {transform: `translate(${depart}px, ${dy - taille}px)`, opacity: 0},
-      {transform: `translate(${depart * .45}px, ${dy * .5 + taille * .2}px)`, opacity: 1, offset: .35},
-      {transform: `translate(${depart * .15}px, ${-taille * .35}px)`, offset: .6},
-      {transform: `translate(${depart * .04}px, 0px)`, offset: .8},
+      {transform: `translate(${dx}px, ${depart}px)`, opacity: 0},
+      {transform: `translate(${dx * .5}px, ${depart * .45}px)`, opacity: 1, offset: .35},
+      {transform: `translate(${dx * .15}px, ${-taille * .3}px)`, offset: .65},
+      {transform: `translate(${dx * .04}px, ${taille * .08}px)`, offset: .82},
       {transform: 'translate(0px, 0px)'}
     ], {duration: duree + i * 120, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both'});
     // Tours entiers, puis la face du jet devant, un peu de travers.
