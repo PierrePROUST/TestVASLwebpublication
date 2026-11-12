@@ -21,10 +21,47 @@ const COMPOSITIONS = {
        hommes: ['garand', 'bar', 'garand', 'garand', 'garand', 'garand',
                 'garand', 'garand', 'garand', 'garand', 'garand', 'garand']},
 };
-// Longueurs en mètres : crosse derrière la main droite, canon devant.
+// Profil de chaque arme, en mètres, dans son plan vertical : u le long
+// du canon depuis la plaque de couche, w vers le haut, l'axe du canon à
+// w = 0. Cotes d'ensemble réelles : M1 Garand 1,107 m (canon 0,61 m),
+// BAR M1918A2 1,215 m (canon 0,61 m). bois et acier : contours fermés ;
+// traits : lignes, d'épaisseur ep (m).
+//   crosse  distance de la plaque de couche à la main droite (poignée)
+//   prise   hauteur de l'axe du canon au-dessus des mains
 const ARMES = {
-  garand: {nom: 'M1', crosse: .32, canon: .78, trait: 1},
-  bar:    {nom: 'BAR', crosse: .32, canon: .90, trait: 1.5, chargeur: true, bipied: true, cadence: 5},
+  garand: {nom: 'M1', titre: 'Fusil M1 Garand', long: 1.107, crosse: .31, prise: .05,
+    bois: [
+      // crosse d'une pièce, de la plaque de couche à la grenadière
+      [[0, -.035], [0, -.16], [.03, -.165], [.26, -.085], [.30, -.092], [.345, -.062], [.74, -.042],
+       [.74, -.008], [.50, -.008], [.34, -.012], [.29, -.035], [.04, -.03]],
+      [[.50, -.008], [.50, .024], [.73, .022], [.74, -.008]],          // garde-main arrière
+      [[.765, -.036], [.765, .02], [.965, .018], [.965, -.03]]],       // garde-main avant
+    acier: [
+      [[.33, -.012], [.33, .016], [.36, .032], [.39, .032], [.40, .018], [.50, .022], [.50, -.008]]],  // boîtier, hausse
+    traits: [
+      {ep: .010, pts: [[.345, -.062], [.355, -.098], [.42, -.098], [.435, -.058]]},   // pontet
+      {ep: .016, pts: [[.965, .008], [1.107, .008]]},                                 // canon
+      {ep: .016, pts: [[.965, -.02], [1.085, -.02]]},                                 // cylindre à gaz
+      {ep: .010, pts: [[1.075, .008], [1.075, .042]]},                                // guidon
+      {ep: .012, pts: [[.752, -.042], [.752, .022]]},                                 // grenadière
+      {ep: .012, pts: [[0, -.035], [0, -.16]]}]},                                     // plaque de couche
+  bar: {nom: 'BAR', titre: 'Fusil-mitrailleur BAR M1918A2', long: 1.215, crosse: .29, prise: .05, cadence: 5,
+    bipied: {u: 1.13, jambe: .30, replie: [[1.13, -.005], [.85, -.05]]},
+    bois: [
+      [[0, -.02], [0, -.15], [.03, -.155], [.23, -.085], [.28, -.095], [.325, -.062], [.325, 0],
+       [.28, -.012], [.04, -.012]],                                                   // crosse
+      [[.60, -.058], [.60, .022], [.80, .018], [.80, -.048]]],                        // fût
+    acier: [
+      [[.325, -.062], [.325, .03], [.60, .03], [.60, -.062]],                         // boîtier
+      [[.435, -.062], [.425, -.205], [.475, -.205], [.485, -.062]]],                  // chargeur de 20 coups
+    traits: [
+      {ep: .010, pts: [[.335, -.062], [.345, -.098], [.405, -.098], [.42, -.062]]},   // pontet
+      {ep: .020, pts: [[.60, .008], [1.215, .008]]},                                  // canon
+      {ep: .034, pts: [[1.12, .008], [1.215, .008]]},                                 // cache-flamme
+      {ep: .014, pts: [[.80, -.028], [1.0, -.028], [1.0, .008]]},                     // tube à gaz
+      {ep: .010, pts: [[.36, .03], [.37, .056], [.40, .03]]},                         // hausse
+      {ep: .010, pts: [[1.10, .008], [1.10, .046]]},                                  // guidon
+      {ep: .012, pts: [[0, -.02], [0, -.15]]}]},                                      // plaque de couche
 };
 
 // ── Petits outils ─────────────────────────────────────────────
@@ -75,14 +112,42 @@ function corps(p){
   J.coD = plier(J.epD, J.maD, OS.bras, OS.avant, p.coude ? [-p.coude[0], p.coude[1], p.coude[2]] : [.6, -.3, -1]);
   return J;
 }
-// L'arme suit les mains (crosse derrière la droite, canon vers la
-// gauche), sauf posée à terre (p.arme : [crosse, bouche]).
+// L'arme suit les mains : poignée dans la droite, fût dans la gauche.
+// aA : plaque de couche sur l'axe du canon ; aB : bouche ; aU : le haut
+// de l'arme. Posée à terre (p.arme : [crosse, bouche]), elle est à plat.
 function poserArme(J, p, arme){
-  if(p.arme){ J.aA = p.arme[0]; J.aB = p.arme[1]; return J; }
-  const d = uni(p.axe || sub(J.maG, J.maD));
-  J.aA = sub(J.maD, mul(d, arme.crosse));
-  J.aB = add(J.maD, mul(d, arme.canon));
+  let d, haut;
+  if(p.arme){
+    d = uni(sub(p.arme[1], p.arme[0])); haut = uni([d[1], -d[0], 0]);
+    J.aA = p.arme[0];
+  } else {
+    d = uni(p.axe || sub(J.maG, J.maD));
+    haut = sub([0, 0, 1], mul(d, d[2]));
+    if(lon(haut) < .2) haut = sub([0, -1, 0], mul(d, -d[1]));
+    haut = uni(haut);
+    J.aA = add(sub(J.maD, mul(d, arme.crosse)), mul(haut, arme.prise));
+  }
+  J.aB = add(J.aA, mul(d, arme.long));
+  J.aU = haut;
   return J;
+}
+// Dessine le profil d'une arme ; pt(u, w) donne le point à l'écran,
+// ech les pixels par mètre.
+function dessinerArme(c, arme, pt, ech, bipied){
+  const chemin = pts => { const q = new Path2D(); pts.forEach((p, i) => { const [x, y] = pt(p[0], p[1]); i ? q.lineTo(x, y) : q.moveTo(x, y); }); return q; };
+  c.lineJoin = 'round'; c.lineCap = 'butt';
+  const fin = Math.max(.6, ech * .006);
+  for(const [liste, plein] of [[arme.bois, '#9a6534'], [arme.acier, '#474d53']])
+    for(const pts of liste){
+      const q = chemin(pts); q.closePath();
+      c.fillStyle = plein; c.fill(q); c.strokeStyle = '#17110a'; c.lineWidth = fin; c.stroke(q);
+    }
+  const traits = arme.traits.concat(bipied ? bipied.map(pts => ({ep: .012, pts})) : []);
+  for(const t of traits){
+    const q = chemin(t.pts), e = Math.max(1.1, t.ep * ech);
+    c.strokeStyle = '#17110a'; c.lineWidth = e + 2 * fin; c.stroke(q);
+    c.strokeStyle = '#5b6269'; c.lineWidth = e; c.stroke(q);
+  }
 }
 
 // ── Poses ─────────────────────────────────────────────────────
@@ -117,7 +182,7 @@ const POSES = {
     return {bassin: [0, 0, .40], penche: .75, tete: .1,
       piedG: [-.13, .16, 0], piedD: [.13, .12, 0], genouG: [-.2, 1, .6], genouD: [.2, 1, .6],
       mainG: 'tete', mainD: 'tete', coude: [-1, .3, -.3],
-      arme: [[.38, -.35, .03], [.42, .2 + h.arme.canon, .03]]};
+      arme: [[.38, -.35, .03], [.42, -.35 + h.arme.long, .03]]};
   },
   // Cassé en mouvement : il court courbé, l'arme au bout du bras.
   fuite(h, ph){
@@ -328,23 +393,26 @@ function dessinerHomme(h, t){
   g.ellipse(ox, oy, COTE * .035, COTE * .022, 0, 0, 6.3); g.fill();
   const corpsP = new Path2D();
   for(const m of MEMBRES) m.forEach((k, i) => { const [x, y] = P(k); i ? corpsP.lineTo(x, y) : corpsP.moveTo(x, y); });
-  const armeP = new Path2D(), a = P('aA'), b = P('aB');
-  armeP.moveTo(...a); armeP.lineTo(...b);
-  if(h.arme.chargeur){
-    const d = sub(J.aB, J.aA), q = add(J.aA, mul(d, .42));
-    armeP.moveTo(...projeter(h, q)); armeP.lineTo(...projeter(h, add(q, [0, 0, -.14])));
-  }
-  if(h.arme.bipied){
-    const d = sub(J.aB, J.aA), q = add(J.aA, mul(d, .86));
-    if(q[2] < .45) for(const k of [-1, 1]){
-      armeP.moveTo(...projeter(h, q)); armeP.lineTo(...projeter(h, [q[0] + k * .12, q[1], 0]));
-    }
-  }
   // Liseré sombre puis trait teinté : lisible sur tous les terrains.
   g.strokeStyle = '#141a08'; g.lineWidth = ep + 2; g.stroke(corpsP);
-  g.lineWidth = ep * h.arme.trait + 2; g.stroke(armeP);
   g.strokeStyle = S.compo.teinte; g.lineWidth = ep; g.stroke(corpsP);
-  g.strokeStyle = '#f4f1e6'; g.lineWidth = Math.max(1, ep * h.arme.trait * .8); g.stroke(armeP);
+  // L'arme, de profil dans son plan.
+  const d = uni(sub(J.aB, J.aA)), haut = uni(J.aU), b = P('aB');
+  const pa = (u, w) => add(add(J.aA, mul(d, u)), mul(haut, w));
+  let bip = null;
+  if(h.arme.bipied){
+    const bi = h.arme.bipied, q = pa(bi.u, 0);
+    // Déployé quand l'arme est près du sol et tenue ; replié sinon.
+    if(q[2] < .45 && Math.abs(haut[2]) > .5){
+      for(const k of [-1, 1]){
+        const pied = projeter(h, [q[0] + k * .13, q[1], 0]), haut2 = projeter(h, q);
+        g.strokeStyle = '#17110a'; g.lineWidth = Math.max(2, ep); g.beginPath(); g.moveTo(...haut2); g.lineTo(...pied); g.stroke();
+        g.strokeStyle = '#5b6269'; g.lineWidth = Math.max(1, ep * .5); g.stroke();
+      }
+    } else bip = [bi.replie];
+  }
+  dessinerArme(g, h.arme, (u, w) => projeter(h, pa(u, w)), METRE * COTE, bip);
+  g.lineCap = 'round';
   // Tête casquée.
   const [tx, ty] = P('tete'), r = .115 * METRE * COTE;
   g.beginPath(); g.arc(tx, ty, r, 0, 6.3); g.fillStyle = S.compo.teinte; g.fill();
@@ -352,7 +420,7 @@ function dessinerHomme(h, t){
   if(h.eclair > 0){
     g.fillStyle = '#fff3a0'; g.strokeStyle = '#ff9d1e'; g.lineWidth = 1;
     const e = COTE * .022 * (h.arme.cadence ? 1.2 : 1);
-    g.beginPath();
+    g.lineWidth = 1; g.beginPath();
     for(let k = 0; k < 8; k++){ const an = k * Math.PI / 4, rr = k % 2 ? e * .4 : e; g.lineTo(b[0] + Math.cos(an) * rr, b[1] + Math.sin(an) * rr); }
     g.closePath(); g.fill(); g.stroke();
   }
@@ -364,11 +432,27 @@ function dessinerHomme(h, t){
   }
   g.restore();
 }
-let etiquettes = false, plaque = true, autoLod = true;
+// Planche des armes, en haut à gauche : les mêmes profils, en grand.
+function dessinerPlanche(){
+  const noms = [...new Set(S.compo.hommes)], k = Math.min(210, L * .42) / 1.215, hl = k * .36 + 16;
+  g.save();
+  g.fillStyle = 'rgba(245,242,230,.9)'; g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 1;
+  arrondi(8, 8, k * 1.215 + 24, hl * noms.length + 8, 6); g.fill(); g.stroke();
+  noms.forEach((n, i) => {
+    const a = ARMES[n], x0 = 20, y0 = 8 + hl * i + 16 + k * .07;
+    g.fillStyle = '#111'; g.font = '600 11px system-ui,sans-serif'; g.textAlign = 'left';
+    g.fillText(`${a.titre} — ${a.long.toFixed(2).replace('.', ',')} m`, x0, 8 + hl * i + 14);
+    const bi = a.bipied;
+    dessinerArme(g, a, (u, w) => [x0 + u * k, y0 + k * .06 - w * k], k,
+      bi ? [[[bi.u, -.005], [bi.u + .04, -bi.jambe * .85]], [[bi.u + .01, -bi.jambe * .85], [bi.u + .08, -bi.jambe * .85]]] : null);
+  });
+  g.restore();
+}
+let etiquettes = false, plaque = true, autoLod = true, planche = true;
 function dessiner(t){
   dessinerCarte();
   const loin = autoLod && COTE < 100;
-  if(loin){ if(vivants().length) dessinerPion(1); return; }
+  if(loin){ if(vivants().length) dessinerPion(1); if(planche) dessinerPlanche(); return; }
   if(vivants().length){
     const [x, y] = ecran(...S.pos);
     if(plaque){
@@ -385,6 +469,7 @@ function dessiner(t){
   // Du fond vers l'avant ; les hommes à terre d'abord.
   const ordre = S.hommes.filter(h => h.J).sort((a, b) => (a.mort ? 0 : 1) - (b.mort ? 0 : 1) || a.pos[1] - b.pos[1]);
   for(const h of ordre) dessinerHomme(h, t);
+  if(planche) dessinerPlanche();
 }
 
 // ── Boucle, taille, commandes ─────────────────────────────────
@@ -422,8 +507,9 @@ function majReglages(){
   autoLod = document.getElementById('auto').checked;
   plaque = document.getElementById('plaque').checked;
   etiquettes = document.getElementById('noms').checked;
+  planche = document.getElementById('planche').checked;
 }
-for(const id of ['taille', 'vue', 'auto', 'plaque', 'noms']) document.getElementById(id).addEventListener('input', majReglages);
+for(const id of ['taille', 'vue', 'auto', 'plaque', 'noms', 'planche']) document.getElementById(id).addEventListener('input', majReglages);
 cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect();
   const [hx, hy] = hexProche((e.clientX - r.left - L / 2) / COTE, (e.clientY - r.top - H / 2) / COTE);
