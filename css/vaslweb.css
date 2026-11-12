@@ -339,6 +339,16 @@ body[data-terminal=tactile] #bas[data-etat=compact]:not([hidden]){top:auto;heigh
   border-radius:12px 12px 0 0;border-top:1px solid var(--bord);box-shadow:0 -6px 20px rgba(0,0,0,.55)}
 body[data-terminal=tactile].saisie #bas[data-etat=compact]:not([hidden]){height:calc(var(--vv-h,100vh) * .5)}
 body[data-terminal=tactile] #bas[data-etat=compact] #journal{min-height:48px}
+/* Chat placé en haut (⬆ de l'aperçu) : la feuille descend sous la barre
+   du haut, la saisie en tête, puis phrases, filtres, journal ; la
+   poignée au pied. En saisie, la barre du haut s'efface : collé en haut. */
+body[data-terminal=tactile][data-chat=haut] #bas[data-etat=compact]:not([hidden]){top:calc(var(--vv-haut,0px) + var(--hautHaut,0px));bottom:auto;
+  border-radius:0 0 12px 12px;border-top:none;border-bottom:1px solid var(--bord);box-shadow:0 6px 20px rgba(0,0,0,.55)}
+body[data-terminal=tactile][data-chat=haut].saisie #bas[data-etat=compact]:not([hidden]){top:calc(var(--vv-haut,0px) + var(--marge-h))}
+body[data-terminal=tactile][data-chat=haut] #chatBarre{order:-4;padding-top:5px}
+body[data-terminal=tactile][data-chat=haut] .chatRapide{order:-3}
+body[data-terminal=tactile][data-chat=haut] .filtresChat{order:-2}
+body[data-terminal=tactile][data-chat=haut] .poigneeChat{order:1}
 .poigneeChat{display:none}
 .filtresChat{display:none;gap:6px;padding:4px 10px;overflow-x:auto;touch-action:pan-x;scrollbar-width:none;flex:none;
   background:var(--barre);border-bottom:1px solid var(--bord)}
@@ -707,10 +717,11 @@ body.maj .pion.immob{pointer-events:auto}
 .barreQCT .qcTri{position:absolute;right:3px;bottom:3px;height:auto!important;pointer-events:none}
 .menuQC.tactile{max-height:70vh;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .menuQC.tactile .it{min-height:44px;padding:4px 14px 4px 8px;gap:10px;cursor:default;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-/* ── Dés en 3D (des-3d.js) : ils roulent au centre de la carte, par-dessus
-   les pions, sous les menus ; jamais un obstacle au clic. */
-#des3d{position:fixed;z-index:9500;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:calc(var(--de) * .45);perspective:900px;transition:opacity .45s}
+/* ── Dés en 3D (des-3d.js) : ils roulent du bas vers le haut et s'arrêtent
+   en haut à droite de la carte, par-dessus les pions, sous les menus ;
+   jamais un obstacle au clic. */
+#des3d{position:fixed;z-index:9500;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;
+  gap:calc(var(--de) * .35);padding:calc(var(--de) * .4);box-sizing:border-box;overflow:hidden;perspective:900px;transition:opacity .45s}
 #des3d.part{opacity:0}
 #des3d .piste{display:flex;gap:calc(var(--de) * .6)}
 #des3d .de3d{width:var(--de);height:var(--de);transform-style:preserve-3d;filter:drop-shadow(0 calc(var(--de) * .18) calc(var(--de) * .12) rgba(0,0,0,.55))}
