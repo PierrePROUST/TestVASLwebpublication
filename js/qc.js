@@ -44,7 +44,8 @@ function construireBarreQC(){
 // ne bouge à l'écran. Seule la copie du milieu est lue par les lecteurs
 // d'écran. Un appui arme le marqueur (l'appui suivant sur la carte le
 // pose), un appui maintenu puis un glissé le tire sur la carte ; un
-// bouton à sous-menu ouvre la feuille de ses marqueurs.
+// bouton à sous-menu ouvre, comme au PC, la liste déroulante de ses
+// marqueurs sous le bouton.
 function construireBarreQCTactile(){
   const nav = document.createElement('nav');
   nav.className = 'navBas barreQCT';
@@ -104,11 +105,11 @@ function _boutonQC(e, bdd, tactile){
     btn.title = e.texte;
     btn.setAttribute('aria-label', e.texte);
     btn.setAttribute('aria-haspopup', 'true');
-    btn._ouvrir = tactile ? () => ouvrirFeuilleQC(e.texte, slots) : focus => ouvrirMenuQC(btn, e.texte, slots, focus);
+    btn._ouvrir = focus => ouvrirMenuQC(btn, e.texte, slots, focus, tactile);
     btn.addEventListener('pointerdown', ev => ev.stopPropagation());
     btn.addEventListener('click', ev => {
       ev.stopPropagation();
-      if(!tactile && _menuOuvert && _menuOuvert.titre === btn) fermerDeroulants(); else btn._ouvrir(ev.detail === 0);
+      if(_menuOuvert && _menuOuvert.titre === btn) fermerDeroulants(); else btn._ouvrir(ev.detail === 0);
     });
   } else {
     const nom = _nomQC(x);
@@ -124,10 +125,14 @@ function _boutonQC(e, bdd, tactile){
 
 // Le sous-menu (QCButtonMenu) : chaque ligne se tire vers la carte, ou se
 // clique. Il se ferme dès que le glissé part, comme le JPopupMenu de VASL.
-function ouvrirMenuQC(btn, titre, slots, focusPremier){
+// Au doigt (tactile) : la même liste, aux lignes et vignettes agrandies ;
+// un appui arme le marqueur (l'appui suivant sur la carte le pose), un
+// appui maintenu puis un glissé le tire sur la carte, la liste défile au
+// doigt ; elle se ferme si la barre défile sous elle.
+function ouvrirMenuQC(btn, titre, slots, focusPremier, tactile){
   fermerDeroulants(); fermerMenu();
   const m = document.createElement('div');
-  m.className = 'deroulant menuQC';
+  m.className = 'deroulant menuQC' + (tactile ? ' tactile' : '');
   m.setAttribute('role', 'menu');
   m.setAttribute('aria-label', titre);
   for(const x of slots){
@@ -135,12 +140,13 @@ function ouvrirMenuQC(btn, titre, slots, focusPremier){
     it.className = 'it';
     it.tabIndex = -1;
     it.setAttribute('role', 'menuitem');
-    const mini = _vignetteQC(x);
+    const mini = _vignetteQC(x, tactile ? QC_ICONE_TACTILE : QC_ICONE);
     const lb = document.createElement('span');
     lb.className = 'lb';
     lb.textContent = _nomQC(x);
     it.append(mini, lb);
-    it.title = 'Glisser vers la carte, ou cliquer pour le poser sur la pile sélectionnée';
+    it.title = tactile ? 'Toucher puis toucher la carte, ou appui maintenu et glisser vers la carte'
+                       : 'Glisser vers la carte, ou cliquer pour le poser sur la pile sélectionnée';
     it.addEventListener('pointerdown', ev => { ev.stopPropagation(); _tirerQC(ev, x, mini, true); });
     it.addEventListener('click', ev => { if(ev.detail === 0){ fermerDeroulants(); _poserQC(x); } });
     m.appendChild(it);
@@ -155,25 +161,12 @@ function ouvrirMenuQC(btn, titre, slots, focusPremier){
   btn.setAttribute('aria-expanded', 'true');
   _menuOuvert = {titre: btn, liste: m, items: [...m.querySelectorAll('.it')], i: focusPremier ? 0 : -1};
   if(focusPremier) _focusItem(0);
-}
-
-// Le sous-menu au doigt : une feuille du bas, une ligne par marqueur.
-function ouvrirFeuilleQC(titre, slots){
-  const f = ouvrirFeuille({id: 'feuilleQC', titre});
-  for(const x of slots){
-    const it = document.createElement('button');
-    it.type = 'button';
-    it.className = 'act ligne qcLigne';
-    const mini = _vignetteQC(x, QC_ICONE_TACTILE);
-    const lb = document.createElement('span');
-    lb.className = 'lb';
-    lb.textContent = _nomQC(x);
-    it.append(mini, lb);
-    it.addEventListener('pointerdown', ev => _tirerQC(ev, x, mini, () => f.fermer()));
-    it.addEventListener('click', ev => { if(ev.detail === 0){ f.fermer(); _poserQC(x); } });
-    f.corps.appendChild(it);
+  // La barre tactile défile : la liste, posée à l'écran, ne la suivrait pas.
+  const barre = btn.closest('.barreQCT');
+  if(barre){
+    const surDefile = () => { if(_menuOuvert && _menuOuvert.liste === m) fermerDeroulants(); };
+    barre.addEventListener('scroll', surDefile, {passive: true, once: true});
   }
-  return f;
 }
 
 // Glissé d'un marqueur QC vers la carte (le DragBuffer de QCButton) ; un
