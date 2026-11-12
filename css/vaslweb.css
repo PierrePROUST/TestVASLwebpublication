@@ -705,7 +705,8 @@ body.maj .pion.immob{pointer-events:auto}
 #chromeHaut > .barreQCT:first-child{padding-top:calc(var(--marge-h) + 2px)}
 .barreQCT .act.rail.qc{position:relative;flex:0 0 46px;width:46px;height:46px;cursor:default}
 .barreQCT .qcTri{position:absolute;right:3px;bottom:3px;height:auto!important;pointer-events:none}
-.qcLigne .mini{flex:none}
+.menuQC.tactile{max-height:70vh;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.menuQC.tactile .it{min-height:44px;padding:4px 14px 4px 8px;gap:10px;cursor:default;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 /* ── Dés en 3D (des-3d.js) : ils roulent au centre de la carte, par-dessus
    les pions, sous les menus ; jamais un obstacle au clic. */
 #des3d{position:fixed;z-index:9500;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
