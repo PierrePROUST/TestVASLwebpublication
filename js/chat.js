@@ -392,17 +392,20 @@ function _brancherChat(){
       envoyerSaisie();
     } else if(e.key === 'Escape' && (!_profil || _profil === 'pc')){ e.preventDefault(); ci.blur(); }
   });
-  // Sur PC, Entrée hors de tout champ place le curseur dans le chat.
-  document.addEventListener('keydown', e => {
-    if(e.key !== 'Enter' || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+  // Sur PC, hors de tout champ, Entrée ne sert qu'à placer le curseur dans
+  // le chat : ni le bouton resté au focus (pose rapide, dernier outil) ni
+  // une commande de pion liée à Entrée ne se répètent. Capté avant tout le
+  // reste ; fenêtres, menus et feuilles ouverts gardent leur Entrée.
+  window.addEventListener('keydown', e => {
+    if(e.key !== 'Enter' || e.isComposing) return;
     if(_profil && _profil !== 'pc') return;
     const t = e.target;
-    if(/^(INPUT|SELECT|TEXTAREA|BUTTON|A)$/.test(t.tagName) || t.isContentEditable) return;
-    if(document.querySelector('.fenetre, .voile, #ctx') || feuilleOuverte()) return;
-    if(ci.offsetParent === null) return;
-    e.preventDefault();
-    ci.focus();
-  });
+    if(/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable) return;
+    if(_menuOuvert || feuilleOuverte() || document.querySelector('.fenetre, .voile, #ctx')) return;
+    if(t.closest && t.closest('.fenetre, .feuille, .deroulant, #ctx')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if(ci.offsetParent !== null) ci.focus();
+  }, true);
   ci.addEventListener('input', _majEnvoi);
   // Le bouton ne prend pas le focus : le clavier reste ouvert.
   bt.addEventListener('pointerdown', e => e.preventDefault());
