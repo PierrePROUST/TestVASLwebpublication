@@ -56,10 +56,12 @@ function placerApercuChat(pos){
   _posApercu = pos;
   try { localStorage.setItem('aslweb.apercuPos', pos); } catch(e){}
   document.body.dataset.chat = pos;
+  if(typeof rafraichirActions === 'function') rafraichirActions(['chatHaut']);
   const ap = document.getElementById('apercuChat');
-  if(!ap) return;
-  document.getElementById(pos === 'haut' ? 'chromeHaut' : 'chromeBas').prepend(ap);
-  _majApercuChat();
+  if(ap){
+    document.getElementById(pos === 'haut' ? 'chromeHaut' : 'chromeBas').prepend(ap);
+    _majApercuChat();
+  }
   _surRedimension();
   majHautBas();
   _majReserveCarte();

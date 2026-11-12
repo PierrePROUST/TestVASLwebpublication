@@ -167,6 +167,8 @@ const ACTIONS = {
              coche: () => !document.getElementById('cote').classList.contains('ferme')},
   journal:  {lib: 'Journal et chat', court: 'Journal', ico: '💬', faire: () => basculerJournal(),
              coche: () => !document.getElementById('bas').hidden},
+  chatHaut: {lib: 'Journal et chat en haut de l\'écran', court: 'En haut', ico: '⬆',
+             coche: () => _posApercu === 'haut', faire: () => placerApercuChat(_posApercu === 'haut' ? 'bas' : 'haut')},
   // SAN et pièges : leur feuille, au PC comme au doigt (plus d'onglet Dés).
   infoScenario: {lib: 'SAN et pièges du scénario…', court: 'SAN', ico: '🎯', faire: () => ouvrirFeuilleSan()},
   palette:  {lib: 'Palette des pions', court: 'Palette', ico: '🗂', faire: () => montrerOnglet('palette')},
@@ -441,7 +443,7 @@ const DISPOSITIONS = {
       // Masqués à la demande : sélection des cartes et panneaux, effectif
       // des piles, LOS détaillée (toujours au clic droit sur le bouton LOS).
       'Affichage': ['zoomPlus', 'zoomMoins', 'ajuster', 'zoom100', '-', 'rotDroite', 'rotGauche', 'rot180', 'rot0', '-', 'masquer', 'tables', '-', 'couche_unite', 'couche_marqueur',
-                    'couche_overlay', '-', 'pions', 'journal', '-', 'profil_auto', 'profil_pc', 'profil_tactile'],
+                    'couche_overlay', '-', 'pions', 'journal', 'chatHaut', '-', 'profil_auto', 'profil_pc', 'profil_tactile'],
       'Outils':    ['los', 'losMuet', 'prefLOS', '-', 'oba', 'bin'],
       'Dés':       [...DES.map(d => d.id), '-', 'des3d', 'infoScenario'],
       'Réseau':    ['reseau', 'utilisateur'],
@@ -622,7 +624,7 @@ function _brancherPoignees(){
   brancher(document.getElementById('poigneeCote'), 'aslweb.largeurCote', '--largeurCote', 240, 520,
     () => ({v: document.getElementById('cote').offsetWidth, sens: dx => -dx}));
   brancher(document.getElementById('poigneeJournal'), 'aslweb.hautJournal', '--hautJournal', 48, 300,
-    () => ({v: document.getElementById('journal').offsetHeight, sens: (dx, dy) => -dy}));
+    () => ({v: document.getElementById('journal').offsetHeight, sens: (dx, dy) => _posApercu === 'haut' && _profil === 'pc' ? dy : -dy}));
 }
 
 // ═══ INTERFACE — PROFIL TACTILE (TABLETTE ET TÉLÉPHONE) ═══
