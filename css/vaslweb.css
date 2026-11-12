@@ -339,6 +339,16 @@ body[data-terminal=tactile] #bas[data-etat=compact]:not([hidden]){top:auto;heigh
   border-radius:12px 12px 0 0;border-top:1px solid var(--bord);box-shadow:0 -6px 20px rgba(0,0,0,.55)}
 body[data-terminal=tactile].saisie #bas[data-etat=compact]:not([hidden]){height:calc(var(--vv-h,100vh) * .5)}
 body[data-terminal=tactile] #bas[data-etat=compact] #journal{min-height:48px}
+/* Chat placé en haut (⬆ de l'aperçu) : la feuille descend sous la barre
+   du haut, la saisie en tête, puis phrases, filtres, journal ; la
+   poignée au pied. En saisie, la barre du haut s'efface : collé en haut. */
+body[data-terminal=tactile][data-chat=haut] #bas[data-etat=compact]:not([hidden]){top:calc(var(--vv-haut,0px) + var(--hautHaut,0px));bottom:auto;
+  border-radius:0 0 12px 12px;border-top:none;border-bottom:1px solid var(--bord);box-shadow:0 6px 20px rgba(0,0,0,.55)}
+body[data-terminal=tactile][data-chat=haut].saisie #bas[data-etat=compact]:not([hidden]){top:calc(var(--vv-haut,0px) + var(--marge-h))}
+body[data-terminal=tactile][data-chat=haut] #chatBarre{order:-4;padding-top:5px}
+body[data-terminal=tactile][data-chat=haut] .chatRapide{order:-3}
+body[data-terminal=tactile][data-chat=haut] .filtresChat{order:-2}
+body[data-terminal=tactile][data-chat=haut] .poigneeChat{order:1}
 .poigneeChat{display:none}
 .filtresChat{display:none;gap:6px;padding:4px 10px;overflow-x:auto;touch-action:pan-x;scrollbar-width:none;flex:none;
   background:var(--barre);border-bottom:1px solid var(--bord)}
