@@ -207,7 +207,14 @@ const S = {                     // tout l'état de la démonstration
   pos: [0, 0], but: [0, 0],     // centre du pion, en côtés de pion
   hommes: [], hs: false,
 };
-const METRE = .15;              // un mètre, en côtés de pion (1,75 m ≈ ¼ de pion)
+// Deux échelles. « Lisible » : la squad tient dans le carré du pion, un
+// mètre vaut 0,15 côté de pion (1,75 m ≈ ¼ de pion). « Réelle » :
+// l'hexagone vaut 40 m (échelle d'ASL), les hommes prennent les
+// intervalles des manuels et sont grossis pour rester visibles.
+const METRE_LISIBLE = .15, HEX_METRES = 40;
+let reelle = false, grossi = 3;
+const metreSol = () => reelle ? (64.5 / 48) / HEX_METRES : METRE_LISIBLE;   // placement
+const metre = () => reelle ? metreSol() * grossi : METRE_LISIBLE;           // corps
 
 function creerSquad(){
   const r = hasard(S.uid);
@@ -226,7 +233,32 @@ function placesFormation(){
   const out = new Map();
   v.forEach((h, k) => {
     let x, y, cap = S.cap;
-    if(S.etat === 'casse'){
+    if(reelle){
+      // Dispositions de la squad d'après FM 7-10 (§ 143, 145, 152) et
+      // FM 22-5, en mètres. Rang k : 0 le chef, 1 le BAR, le dernier
+      // l'adjoint.
+      const P = 2.6, I = 3, u = metreSol();
+      if(S.etat === 'casse'){
+        const a = h.e4 * 6.283, d = 4 + 9 * Math.abs(h.e3);
+        x = Math.cos(a) * d; y = Math.sin(a) * d; cap = S.cap + 3.1416 + h.e1 * 1.2;
+      } else if(enRoute){
+        // « Squad column » : file décalée, le chef en tête, le BAR
+        // près de lui, l'adjoint en queue.
+        x = (k % 2 ? 1.5 : -1.5) + .4 * h.e1; y = ((n - 1) / 2 - k) * I + .4 * h.e2;
+      } else if(S.etat === 'debout'){
+        // « Squad wedge » : en coin derrière le chef.
+        const rg = Math.ceil(k / 2), fond = Math.ceil((n - 1) / 2);
+        x = (k % 2 ? 1 : -1) * rg * P + .4 * h.e1; y = (fond / 2 - rg) * P + .4 * h.e2;
+        if(!k) x = 0;
+      } else {
+        // « As skirmishers » : en ligne, le BAR à une aile pour tirer
+        // en écharpe, le chef derrière le centre pour diriger le feu.
+        if(!k && n > 1){ x = 0; y = -3.5; }
+        else { const m = Math.max(1, n - 1), i = n > 1 ? k - 1 : 0; x = (i - (m - 1) / 2) * I + .3 * h.e1; y = 1.5 + .9 * h.e2; }
+        cap += .12 * h.e3;
+      }
+      x *= u; y *= u;
+    } else if(S.etat === 'casse'){
       const a = h.e4 * 6.283, d = .08 + .22 * Math.abs(h.e3);
       x = Math.cos(a) * d; y = Math.sin(a) * d; cap = S.cap + 3.1416 + h.e1 * 1.2;
     } else if(enRoute){
@@ -275,7 +307,8 @@ function reduire(){
 function eliminer(){ tomber(vivants()); majInfo(); }
 
 // ── Animation ─────────────────────────────────────────────────
-const VITESSE_PION = .95, VITESSE_HOMME = 1.5, FOULEE = .11;   // côtés de pion / s
+const VITESSE_PION = .95, VITESSE_HOMME = 1.5;   // côtés de pion / s
+const foulee = () => .73 * metre();
 const tourner = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 function avancer(dt, t){
   // Le pion glisse vers son hexagone ; les hommes rejoignent leur place.
@@ -299,7 +332,7 @@ function avancer(dt, t){
         const v = VITESSE_HOMME * (S.etat === 'casse' ? 1.25 : 1) * (.9 + .1 * h.e4);
         const pas = Math.min(e, v * dt);
         h.pos[0] += ex / e * pas; h.pos[1] += ey / e * pas;
-        h.ph += pas / FOULEE * (S.etat === 'casse' ? .8 : 1);
+        h.ph += pas / foulee() * (S.etat === 'casse' ? .8 : 1);
         h.cap = tourner(h.cap, Math.atan2(ex, -ey), Math.min(1, dt * 10));
         cible = (S.etat === 'casse' ? POSES.fuite : POSES.marche)(h, h.ph);
       } else {
@@ -375,7 +408,7 @@ function dessinerPion(alpha){
 // Un point du repère d'un homme → l'écran. Le sol de la carte reste vu
 // de dessus ; seul le corps est vu sous l'angle ELEV.
 function projeter(h, p){
-  const s = Math.sin(h.cap), c = Math.cos(h.cap), m = METRE * COTE;
+  const s = Math.sin(h.cap), c = Math.cos(h.cap), m = metre() * COTE;
   const gx = p[0] * c + p[1] * s, gy = p[0] * s - p[1] * c;
   const [ox, oy] = ecran(h.pos[0], h.pos[1]);
   return [ox + gx * m, oy + gy * m * Math.sin(ELEV) - p[2] * m * Math.cos(ELEV)];
@@ -385,12 +418,12 @@ const MEMBRES = [['piG', 'geG', 'haG', 'pel', 'haD', 'geD', 'piD'], ['pel', 'cou
 function dessinerHomme(h, t){
   let alpha = 1;
   if(h.mort){ const age = (t - h.mort) / 1000; if(age > 3) return; if(age > 1.4) alpha = 1 - (age - 1.4) / 1.6; }
-  const J = h.J, P = k => projeter(h, J[k]), ep = Math.max(1, COTE * .011);
+  const J = h.J, P = k => projeter(h, J[k]), mp = metre() * COTE, ep = Math.max(1, mp * .073);
   g.save(); g.globalAlpha = alpha; g.lineCap = 'round'; g.lineJoin = 'round';
   // Ombre au sol.
   const [ox, oy] = projeter(h, [J.pel[0], J.pel[1], 0]);
   g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath();
-  g.ellipse(ox, oy, COTE * .035, COTE * .022, 0, 0, 6.3); g.fill();
+  g.ellipse(ox, oy, mp * .23, mp * .15, 0, 0, 6.3); g.fill();
   const corpsP = new Path2D();
   for(const m of MEMBRES) m.forEach((k, i) => { const [x, y] = P(k); i ? corpsP.lineTo(x, y) : corpsP.moveTo(x, y); });
   // Liseré sombre puis trait teinté : lisible sur tous les terrains.
@@ -411,12 +444,49 @@ function dessinerHomme(h, t){
       }
     } else bip = [bi.replie];
   }
-  dessinerArme(g, h.arme, (u, w) => projeter(h, pa(u, w)), METRE * COTE, bip);
+  dessinerArme(g, h.arme, (u, w) => projeter(h, pa(u, w)), mp, bip);
   g.lineCap = 'round';
-  // Tête casquée.
-  const [tx, ty] = P('tete'), r = .115 * METRE * COTE;
+  // Tenue : jambières de toile claire au bas des jambes (M1938),
+  // havresac M1928 dans le dos.
+  g.strokeStyle = '#d8cfa6'; g.lineWidth = Math.max(1, ep * .9);
+  for(const [ge, pi] of [['geG', 'piG'], ['geD', 'piD']]){
+    const haut = add(J[pi], mul(sub(J[ge], J[pi]), .55));
+    g.beginPath(); g.moveTo(...projeter(h, haut)); g.lineTo(...P(pi)); g.stroke();
+  }
+  const dos = uni(sub(J.cou, J.pel)), arr = uni([0, -dos[2], dos[1]]);
+  const sacH = add(add(J.pel, mul(dos, .50)), mul(arr, .11)), sacB = add(add(J.pel, mul(dos, .20)), mul(arr, .11));
+  g.beginPath(); g.moveTo(...projeter(h, sacH)); g.lineTo(...projeter(h, sacB));
+  g.strokeStyle = '#141a08'; g.lineWidth = mp * .2 + 1.5; g.stroke();
+  g.strokeStyle = '#8c8a4e'; g.lineWidth = mp * .2; g.stroke();
+  // Tête, puis casque M1 : une calotte de 28 × 24 cm, haute de 18,
+  // qui descend sur la nuque et les tempes, vert olive mat.
+  const [tx, ty] = P('tete'), r = .105 * mp;
   g.beginPath(); g.arc(tx, ty, r, 0, 6.3); g.fillStyle = S.compo.teinte; g.fill();
   g.lineWidth = Math.max(1, ep * .6); g.strokeStyle = '#141a08'; g.stroke();
+  const axe = uni(sub(J.tete, J.cou)), sommet = projeter(h, add(J.tete, mul(axe, .05)));
+  const av = projeter(h, add(J.tete, [0, .14, 0])), dr = projeter(h, add(J.tete, [.12, 0, 0]));
+  const hautC = projeter(h, add(J.tete, mul(axe, .16)));
+  // Demi-ellipsoïde projeté : la base (ellipse du bord) et la calotte.
+  const ex = [av[0] - tx, av[1] - ty], ey = [dr[0] - tx, dr[1] - ty], ez = [hautC[0] - tx, hautC[1] - ty];
+  g.beginPath();
+  for(let k = 0; k <= 24; k++){
+    // Contour : on balaie le bord puis la calotte, et on garde l'enveloppe.
+    const a = k / 24 * 6.2832;
+    let mx = -1e9, px = 0, py = 0;
+    const nx = Math.cos(a), ny = Math.sin(a);
+    for(let j = 0; j <= 6; j++){
+      const el = j / 6 * 1.5708, ce = Math.cos(el), se = Math.sin(el);
+      for(let q = 0; q < 16; q++){
+        const az = q / 16 * 6.2832;
+        const X = tx + (ex[0] * Math.cos(az) + ey[0] * Math.sin(az)) * ce + ez[0] * se;
+        const Y = ty + (ex[1] * Math.cos(az) + ey[1] * Math.sin(az)) * ce + ez[1] * se - .02 * mp * Math.cos(ELEV);
+        const d = (X - tx) * nx + (Y - ty) * ny;
+        if(d > mx){ mx = d; px = X; py = Y; }
+      }
+    }
+    k ? g.lineTo(px, py) : g.moveTo(px, py);
+  }
+  g.closePath(); g.fillStyle = '#5a6430'; g.fill(); g.strokeStyle = '#141a08'; g.lineWidth = Math.max(1, ep * .5); g.stroke();
   if(h.eclair > 0){
     g.fillStyle = '#fff3a0'; g.strokeStyle = '#ff9d1e'; g.lineWidth = 1;
     const e = COTE * .022 * (h.arme.cadence ? 1.2 : 1);
@@ -428,7 +498,7 @@ function dessinerHomme(h, t){
     g.font = `600 ${Math.max(9, COTE * .05)}px system-ui,sans-serif`; g.textAlign = 'center';
     g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.fillStyle = '#fff';
     const txt = h.i === 0 ? 'Chef' : h.arme.nom;
-    g.strokeText(txt, tx, ty - r - 3); g.fillText(txt, tx, ty - r - 3);
+    g.strokeText(txt, tx, ty - r * 2.6 - 3); g.fillText(txt, tx, ty - r * 2.6 - 3);
   }
   g.restore();
 }
@@ -457,7 +527,7 @@ function dessiner(t){
     const [x, y] = ecran(...S.pos);
     if(plaque){
       arrondi(x - COTE / 2, y - COTE / 2, COTE, COTE, COTE / 12);
-      g.fillStyle = S.compo.teinte + '55'; g.fill();
+      g.fillStyle = S.compo.teinte + (reelle ? '30' : '55'); g.fill();
       g.strokeStyle = 'rgba(20,26,8,.55)'; g.lineWidth = 1; g.stroke();
     }
     // Le facteur du pion, au pied des figurines.
@@ -493,6 +563,7 @@ function majInfo(){
   const detail = Object.entries(n).map(([k, q]) => `${q} ${k === 'M1' ? 'M1 Garand' : k}`).join(', ');
   document.getElementById('info').textContent = v.length
     ? `${S.compo.nom}${S.hs ? ' (demi-squad)' : ''} ${S.hs ? S.compo.facteurHS : S.compo.facteur} — ${v.length} hommes : ${detail}. Teinte du pion VASL : ${S.compo.teinte}.`
+      + (reelle ? ` Hexagone = ${HEX_METRES} m ; hommes grossis ${grossi} fois.` : '')
     : 'Squad éliminée.';
 }
 document.querySelectorAll('#etats [data-etat]').forEach(b => b.addEventListener('click', () => changerEtat(b.dataset.etat)));
@@ -508,8 +579,13 @@ function majReglages(){
   plaque = document.getElementById('plaque').checked;
   etiquettes = document.getElementById('noms').checked;
   planche = document.getElementById('planche').checked;
+  const r0 = reelle;
+  reelle = document.getElementById('echelle').value === 'reelle'; grossi = +document.getElementById('grossi').value;
+  document.getElementById('grossiV').textContent = '× ' + grossi;
+  document.getElementById('grossi').disabled = !reelle;
+  if(r0 !== reelle && S.hommes.length){ placer(true); majInfo(); }
 }
-for(const id of ['taille', 'vue', 'auto', 'plaque', 'noms', 'planche']) document.getElementById(id).addEventListener('input', majReglages);
+for(const id of ['taille', 'vue', 'auto', 'plaque', 'noms', 'planche', 'echelle', 'grossi']) document.getElementById(id).addEventListener('input', majReglages);
 cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect();
   const [hx, hy] = hexProche((e.clientX - r.left - L / 2) / COTE, (e.clientY - r.top - H / 2) / COTE);
