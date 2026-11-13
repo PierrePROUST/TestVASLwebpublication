@@ -202,6 +202,8 @@ const EN = {
   'Comme le serveur de VASSAL : l\'hôte ouvre une salle et donne son code ; qui la rejoint reçoit la partie du propriétaire, puis chaque coup joué part chez les autres.':
     'Like the VASSAL server: the host opens a room and gives its code; whoever joins receives the owner\'s game, then every move is sent to the others.',
   'Vous jouez sous le nom': 'You are playing as',
+  'Pour rejoindre, le code de la salle suffit : aucun mot de passe n\'est demandé. « Identification… » sert seulement à voir ses propres pions dissimulés et HIP.':
+    'To join, the room code is enough: no password is needed. “Identification…” is only for seeing your own concealed and HIP counters.',
   'Liaison': 'Connection', 'Internet (direct ou par relais)': 'Internet (direct or relayed)',
   'Onglets de ce navigateur': 'Tabs of this browser',
   'Nom de la salle (pour héberger)': 'Room name (to host)', 'Code de la salle (pour rejoindre)': 'Room code (to join)',
