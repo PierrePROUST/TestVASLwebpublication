@@ -133,7 +133,7 @@ const EN = {
   'Sélection : unités': 'Selection: units', 'Sélection : marqueurs': 'Selection: markers',
   'Sélection : cartes et panneaux': 'Selection: maps and panels',
   'Sélection : overlays': 'Selection: overlays',
-  'Affichage : automatique': 'Display: automatic', 'Affichage : PC': 'Display: PC',
+  'Affichage : automatique': 'Display: automatic', 'Affichage : PC/Mac': 'Display: PC/Mac',
   'Affichage : tactile': 'Display: touch',
   'Début du log': 'Start of logfile', 'Fin du log': 'End of logfile',
   'Coup précédent': 'Step back', 'Coup suivant': 'Step forward',
@@ -156,7 +156,7 @@ const EN = {
   'Filtres du journal': 'Chat log filters', 'Saisie rapide': 'Quick chat',
   // Aide
   'Raccourcis clavier et gestes': 'Keyboard shortcuts and gestures',
-  'Menus': 'Menus',
+  'Menus': 'Menus', 'Configuration…': 'Settings…', 'Configuration': 'Settings',
   'Pions et piles': 'Counters and stacks',
   'Commandes du pion (menu)': 'Counter commands (menu)', 'clic droit · double appui': 'right-click · double tap',
   'Sélectionner la pile': 'Select stack', 'clic': 'click',
