@@ -8,16 +8,14 @@
 // vus. Les métadonnées XML et le buildFile changent avec VASL : réseau
 // d'abord ; les boards, overlays et images : cache d'abord.
 // ═══════════════════════════════════════════════════════════════
-// VERSION est remplacée à la publication par le commit publié
-// (outils/publier-vaslweb.sh) : le cache de la version précédente est
-// alors effacé à l'activation (pas celui des ressources VASL, dont le nom
-// ne change pas : les boards vus restent hors ligne d'une version à
-// l'autre). Le même script ajoute « ?v=<commit> » aux
-// .js et .css de APP et de VASLweb.html, pour qu'une page neuve ne
-// prenne jamais un script de la version d'avant dans un cache HTTP.
-// APP : tout fichier de l'application (le script de publication refuse
-// une page qui charge un .js ou un .css absent de cette liste).
-const VERSION = 'souris-chat-pc';
+// VERSION change à chaque publication : le cache de la version précédente
+// est alors effacé à l'activation (pas celui des ressources VASL, dont le
+// nom ne change pas : les boards vus restent hors ligne d'une version à
+// l'autre). La même valeur suit en « ?v=<version> » les .js et .css de APP
+// et de VASLweb.html, pour qu'une page neuve ne prenne jamais un script de
+// la version d'avant dans un cache HTTP.
+// APP : tout fichier de l'application.
+const VERSION = 'points-cases';
 const CACHE_APP = 'vaslweb-app-' + VERSION;
 // Nom fixe ; « -v1 » garde le cache des boards des versions d'avant.
 const CACHE_VASL = 'vaslweb-vasl-v1';
@@ -31,43 +29,43 @@ const APP = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
-  './pwa.js?v=souris-chat-pc',
-  './css/vaslweb.css?v=souris-chat-pc',
-  './js/outils.js?v=souris-chat-pc',
-  './js/donnees/ssr.js?v=souris-chat-pc',
-  './js/donnees/overlays-ext.js?v=souris-chat-pc',
-  './js/donnees/mouvement.js?v=souris-chat-pc',
-  './js/langue.js?v=souris-chat-pc',
-  './js/noyau.js?v=souris-chat-pc',
-  './js/fichiers.js?v=souris-chat-pc',
-  './js/carte.js?v=souris-chat-pc',
-  './js/hexagones.js?v=souris-chat-pc',
-  './js/los-moteur.js?v=souris-chat-pc',
-  './js/los-pions.js?v=souris-chat-pc',
-  './js/los-fil.js?v=souris-chat-pc',
-  './js/pieces.js?v=souris-chat-pc',
-  './js/pions.js?v=souris-chat-pc',
-  './js/vlog.js?v=souris-chat-pc',
-  './js/mf.js?v=souris-chat-pc',
-  './js/commandes.js?v=souris-chat-pc',
-  './js/chat-rapports.js?v=souris-chat-pc',
-  './js/flare.js?v=souris-chat-pc',
-  './js/cvp.js?v=souris-chat-pc',
-  './js/dissimulation.js?v=souris-chat-pc',
-  './js/tactile.js?v=souris-chat-pc',
-  './js/bdd.js?v=souris-chat-pc',
-  './js/qrdc.js?v=souris-chat-pc',
-  './js/oba.js?v=souris-chat-pc',
-  './js/des-utilisateurs.js?v=souris-chat-pc',
-  './js/des-3d.js?v=souris-chat-pc',
-  './js/ift.js?v=souris-chat-pc',
-  './js/reseau.js?v=souris-chat-pc',
-  './js/export.js?v=souris-chat-pc',
-  './js/preferences.js?v=souris-chat-pc',
-  './js/qc.js?v=souris-chat-pc',
-  './js/interface.js?v=souris-chat-pc',
-  './js/chat.js?v=souris-chat-pc',
-  './js/menus.js?v=souris-chat-pc'
+  './pwa.js?v=points-cases',
+  './css/vaslweb.css?v=points-cases',
+  './js/outils.js?v=points-cases',
+  './js/donnees/ssr.js?v=points-cases',
+  './js/donnees/overlays-ext.js?v=points-cases',
+  './js/donnees/mouvement.js?v=points-cases',
+  './js/langue.js?v=points-cases',
+  './js/noyau.js?v=points-cases',
+  './js/fichiers.js?v=points-cases',
+  './js/carte.js?v=points-cases',
+  './js/hexagones.js?v=points-cases',
+  './js/los-moteur.js?v=points-cases',
+  './js/los-pions.js?v=points-cases',
+  './js/los-fil.js?v=points-cases',
+  './js/pieces.js?v=points-cases',
+  './js/pions.js?v=points-cases',
+  './js/vlog.js?v=points-cases',
+  './js/mf.js?v=points-cases',
+  './js/commandes.js?v=points-cases',
+  './js/chat-rapports.js?v=points-cases',
+  './js/flare.js?v=points-cases',
+  './js/cvp.js?v=points-cases',
+  './js/dissimulation.js?v=points-cases',
+  './js/tactile.js?v=points-cases',
+  './js/bdd.js?v=points-cases',
+  './js/qrdc.js?v=points-cases',
+  './js/oba.js?v=points-cases',
+  './js/des-utilisateurs.js?v=points-cases',
+  './js/des-3d.js?v=points-cases',
+  './js/ift.js?v=points-cases',
+  './js/reseau.js?v=points-cases',
+  './js/export.js?v=points-cases',
+  './js/preferences.js?v=points-cases',
+  './js/qc.js?v=points-cases',
+  './js/interface.js?v=points-cases',
+  './js/chat.js?v=points-cases',
+  './js/menus.js?v=points-cases'
 ];
 const HOTES_VASL = ['raw.githubusercontent.com', 'unpkg.com'];
 
