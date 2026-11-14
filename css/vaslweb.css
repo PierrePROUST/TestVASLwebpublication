@@ -745,8 +745,3 @@ body.maj .pion.immob{pointer-events:auto}
 #des3d .legende{padding:4px 12px;border-radius:14px;background:rgba(0,0,0,.72);color:#fff;font-size:15px;font-weight:600;
   white-space:nowrap;opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s}
 #des3d .legende.vue{opacity:1;transform:none}
-
-/* Point au centre des cases à pions d'une carte de scénario ou d'un
-   bandeau : le pion lâché dans la case s'y pose. */
-.vtc td[data-pt]::after{content:"";position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
-  border-radius:50%;background:#e02020;opacity:.75;pointer-events:none}
