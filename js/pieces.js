@@ -751,7 +751,6 @@ function _vtCss(k, codes){
     + `.vtc .nvr{position:absolute;left:6%;bottom:6%;font:bold ${px(9)} Arial;color:#fff}`
     + `.vtc .coin{position:absolute;width:75%;height:75%;pointer-events:none}`
     + `.vtc .coin img{position:absolute;width:33%;height:33%}`;
-  // (le point au centre des cases à pions est dans vaslweb.css : .vtc td[data-pt])
   for(const code of codes){
     const [, coul, txt] = _vtNation(code);
     css += `.vtc td.n-${code}{background-color:${coul};height:${px(35)};width:${px(60)};font-weight:bold;`
@@ -832,7 +831,7 @@ function _vtCorps(s, logos){
   const roue = (span) => `<td data-pt class="phasewheel" data-case="PhaseWheel" colspan="2" rowspan="${span}">Phase<br>Wheel</td>`;
   const jetons = (noms) => noms.map(n => `<td data-pt class="token" data-case="${VT_ROLES[n] || ''}">${n}</td>`).join('');
   const piste = '<td class="track" rowspan="5">T<br>U<br>R<br>N<br><br>T<br>R<br>A<br>C<br>K</td>';
-  const misc = `<td class="token">Wind Dir · Wind · Gusts · ECs · Weather · LV · NQ</td>`;
+  const misc = `<td data-pt class="token">Wind Dir · Wind · Gusts · ECs · Weather · LV · NQ</td>`;
 
   let h = '<table class="main">';
   if(s.joueurs === 3 || !/^(vertical|comphorizontal|compvertical)$/.test(s.disposition)){
@@ -906,7 +905,8 @@ function _vtCaler(p, e){
   p.decX = mx; p.decY = my;
 }
 
-// Cases à pions d'une carte ou d'un bandeau (td[data-pt]) : rectangles en
+// Cases à pions d'une carte ou d'un bandeau (td[data-pt], ancrage
+// invisible) : rectangles en
 // pixels natifs, comptés depuis le centre du panneau. Un pion lâché dans
 // une case se pose en son centre (positionDepot). Les offsets ne dépendent
 // ni du zoom ni de la rotation de la vue.
