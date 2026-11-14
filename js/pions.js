@@ -243,7 +243,8 @@ async function _majPieceFond(p, d, gen, e, ech){
   p.fond = true;
   p.larg = Math.round(e.offsetWidth * ech);
   p.haut = Math.round(e.offsetHeight * ech);
-  if(d.vt && (d.vt.genre === 'carte' || d.vt.genre === 'bandeau')) _vtCaler(p, e);
+  p.cases = null;
+  if(d.vt && (d.vt.genre === 'carte' || d.vt.genre === 'bandeau')){ _vtCaler(p, e); _vtCases(p, e); }
   _etendreCarte();
   p.sz = Math.max(p.larg, p.haut);
   rendrePile(cle(p));

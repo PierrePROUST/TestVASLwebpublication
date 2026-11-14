@@ -330,7 +330,7 @@ function distanceHex(x1, y1, x2, y2){
 function deplacerAuDoigt(liste, x, y){
   liste = liste.filter(p => !p.cache && !p.deleted);
   if(!liste.length) return;
-  const pos = positionDepot(x, y);
+  const pos = positionDepot(x, y, liste);
   const loin = Math.max(-1, ...liste.map(p => distanceHex(p.x, p.y, pos.x, pos.y) ?? -1));
   if(loin <= DISTANCE_ANORMALE) return deplacer(liste, x, y);
   const noms = liste.slice(0, 5).map(p => accesRefuse(p) ? T('Pion dissimulé') : p.nom).join(', ')
