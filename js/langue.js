@@ -192,6 +192,9 @@ const EN = {
   'Le nom et le mot de passe sont retenus sur ce poste (Préférences ▸ Utilisateur, roue ⚙) : la prochaine carte ouverte ne les redemandera pas.':
     'The name and password are kept on this device (Preferences ▸ User, ⚙ wheel): the next map opened will not ask for them again.',
   'Saisir le nom d\'utilisateur.': 'Enter the user name.', 'Identifiants mémorisés refusés :': 'Saved credentials rejected:',
+  'Général': 'General',
+  'Vos adversaires pourront retirer le « ? » de vos unités dissimulées (commande Conceal), sans les voir avant. Les unités HIP restent cachées. Le choix part aussitôt aux joueurs de la salle et la partie le garde.':
+    'Your opponents will be able to remove the "?" from your concealed units (Conceal command), without seeing them first. HIP units stay hidden. The choice is sent at once to the players in the room and kept in the game.',
   'Nom d\'utilisateur': 'User name', 'Afficher le mot de passe': 'Show password',
   'Enregistrer et se connecter': 'Save and log in', 'Effacer': 'Clear',
   'aucun identifiant enregistré': 'no saved credentials',

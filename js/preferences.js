@@ -7,11 +7,14 @@
 //         LOS mode, Unit opacity % during LOS checks (js/los-fil.js).
 //   Décompte MF / MP : affichage du décompte des MF de l'infanterie et
 //         des MP des véhicules (js/mf.js).
+//   Général : « Let opponent unconceal my units », l'option
+//         OpponentUnmaskable d'ObscurableOptions que VASL place dans
+//         l'onglet General (js/des-utilisateurs.js, permettreDemasquage).
 //   Utilisateur : nom et mot de passe gardés sur ce poste ; ils
 //         remplacent la boîte d'identification à l'ouverture d'une carte
 //         (js/des-utilisateurs.js, identifierJoueur).
 // ═══════════════════════════════════════════════════════════════
-const ONGLETS_PREF = ['utilisateur', 'los', 'mvt'];
+const ONGLETS_PREF = ['general', 'utilisateur', 'los', 'mvt'];
 let _ongletPref = ONGLETS_PREF.includes(_lirePref('aslweb.ongletPreferences')) ? _lirePref('aslweb.ongletPreferences') : 'los';
 
 function ouvrirPreferences(onglet){
@@ -29,9 +32,15 @@ function ouvrirPreferences(onglet){
     + `<span>${_esc(T(lib))}${nomVASL(vasl)}</span></label>`;
   w.innerHTML = `<div class="ft">⚙ ${_esc(T('Préférences'))}</div><div class="fc">
     <div class="ongletsPref" role="tablist">
+      <button type="button" role="tab" data-onglet="general">${_esc(T('Général'))}</button>
       <button type="button" role="tab" data-onglet="utilisateur">${_esc(T('Utilisateur'))}</button>
       <button type="button" role="tab" data-onglet="los">LOS</button>
       <button type="button" role="tab" data-onglet="mvt">${_esc(T('Décompte MF / MP'))}</button>
+    </div>
+    <div class="pagePref" data-page="general" role="tabpanel">
+      ${coche('id="prefDevoile"', 'Permettre à mes adversaires de démasquer mes unités', 'Let opponent unconceal my units')}
+      <p class="fnote">${_esc(T('Vos adversaires pourront retirer le « ? » de vos unités dissimulées (commande Conceal), sans les voir avant. Les unités HIP restent cachées. Le choix part aussitôt aux joueurs de la salle et la partie le garde.'))}</p>
+      <p class="fnote" id="prefDevoileObs" hidden>${_esc(T('Vous êtes observateur : la case s\'appliquera à vos unités dès que vous vous identifierez (Utilisateur).'))}</p>
     </div>
     <div class="pagePref" data-page="utilisateur" role="tabpanel">
       <p class="fnote" id="prefConnecte"></p>
@@ -77,6 +86,9 @@ function ouvrirPreferences(onglet){
     q('[data-los="opacite"]').value = _losOpacite;
     q('[data-mvt="MF"]').checked = decompteAffiche('MF');
     q('[data-mvt="MP"]').checked = decompteAffiche('MP');
+    // La préférence elle-même, comme le BooleanConfigurer de VASSAL.
+    q('#prefDevoile').checked = _lireLocal(CLE_DEMASQUABLE, '0') === '1';
+    q('#prefDevoileObs').hidden = !!(_utilisateur || _admin);
     q('[data-seg="fil"]').style.background = LOS_COUL_FIL;
     q('[data-seg="gene"]').style.background = LOS_COUL_GENE;
     q('[data-seg="bloc"]').style.background = LOS_COUL_BLOC;
@@ -109,6 +121,7 @@ function ouvrirPreferences(onglet){
     for(const k of ['fil', 'gene', 'bloc']) reglerLOS(k, LOS_DEFAUTS[k]);
     lire();
   });
+  q('#prefDevoile').addEventListener('change', e => permettreDemasquage(e.target.checked));
   for(const u of ['MF', 'MP']) q(`[data-mvt="${u}"]`).addEventListener('change', e => reglerDecompte(u, e.target.checked));
   // Utilisateur : contrôlé comme dans la boîte d'identification.
   const err = q('#prefErr');
