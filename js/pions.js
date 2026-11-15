@@ -117,6 +117,13 @@ function sommetDeplace(l, p){
   const k = cle(p), dans = l.filter(q => cle(q) === k), s = dans.length ? dans : l;
   return s.length ? s.reduce((a, b) => b.ordre > a.ordre ? b : a) : p;
 }
+// Ce que montre le fantôme d'un glissé : les pions qui partent de
+// l'hexagone de p, du fond au sommet — un véhicule sous ses passagers ou
+// ses marqueurs garde ainsi son VCA et son TCA à l'écran.
+function pileDeplacee(l, p){
+  const k = cle(p), dans = l.filter(q => cle(q) === k && !q.cache && q.el);
+  return dans.length ? dans.sort((a, b) => a.ordre - b.ordre) : [sommetDeplace(l, p)];
+}
 
 // Au doigt (doigt vrai), un pion sélectionné emporte toujours toute la
 // sélection, pile entière comprise : pour n'en tirer qu'un, on le touche
