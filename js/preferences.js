@@ -7,8 +7,12 @@
 //         LOS mode, Unit opacity % during LOS checks (js/los-fil.js).
 //   Décompte MF / MP : affichage du décompte des MF de l'infanterie et
 //         des MP des véhicules (js/mf.js).
+//   Utilisateur : nom et mot de passe gardés sur ce poste ; ils
+//         remplacent la boîte d'identification à l'ouverture d'une carte
+//         (js/des-utilisateurs.js, identifierJoueur).
 // ═══════════════════════════════════════════════════════════════
-let _ongletPref = _lirePref('aslweb.ongletPreferences') === 'mvt' ? 'mvt' : 'los';
+const ONGLETS_PREF = ['utilisateur', 'los', 'mvt'];
+let _ongletPref = ONGLETS_PREF.includes(_lirePref('aslweb.ongletPreferences')) ? _lirePref('aslweb.ongletPreferences') : 'los';
 
 function ouvrirPreferences(onglet){
   fermerFenetres();
@@ -25,8 +29,22 @@ function ouvrirPreferences(onglet){
     + `<span>${_esc(T(lib))}${nomVASL(vasl)}</span></label>`;
   w.innerHTML = `<div class="ft">⚙ ${_esc(T('Préférences'))}</div><div class="fc">
     <div class="ongletsPref" role="tablist">
+      <button type="button" role="tab" data-onglet="utilisateur">${_esc(T('Utilisateur'))}</button>
       <button type="button" role="tab" data-onglet="los">LOS</button>
       <button type="button" role="tab" data-onglet="mvt">${_esc(T('Décompte MF / MP'))}</button>
+    </div>
+    <div class="pagePref" data-page="utilisateur" role="tabpanel">
+      <p class="fnote" id="prefConnecte"></p>
+      <label>${_esc(T('Nom d\'utilisateur'))}<input id="prefNom" maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+      <label>${_esc(T('Mot de passe'))}<input id="prefMdp" type="password" autocomplete="current-password"></label>
+      <label class="coche"><input type="checkbox" id="prefVoirMdp"><span>${_esc(T('Afficher le mot de passe'))}</span></label>
+      <div class="ferr" id="prefErr"></div>
+      <div class="fb">
+        <button type="button" id="prefConnecter" class="prim">${_esc(T('Enregistrer et se connecter'))}</button>
+        <button type="button" id="prefOublier">${_esc(T('Effacer'))}</button>
+        <button type="button" id="prefGerer">${_esc(T('Utilisateurs…'))}</button>
+      </div>
+      <p class="fnote">${_esc(T('Retenus sur ce poste, ils identifient le joueur à chaque carte ouverte, sans la boîte d\'identification ; effacés, elle revient. Le mot de passe est celui de VASL (il ouvre vos pions dissimulés et HIP) ; il est gardé en clair dans ce navigateur : ne pas l\'enregistrer sur un poste partagé.'))}</p>
     </div>
     <div class="pagePref" data-page="los" role="tabpanel">
       ${couleur('fil', 'Couleur du fil', 'Thread Color')}
@@ -63,6 +81,13 @@ function ouvrirPreferences(onglet){
     q('[data-seg="gene"]').style.background = LOS_COUL_GENE;
     q('[data-seg="bloc"]').style.background = LOS_COUL_BLOC;
   };
+  const lireIdent = () => {
+    const m = identifiantsMemorises();
+    q('#prefNom').value = m ? m.nom : '';
+    q('#prefMdp').value = m ? m.mdp : '';
+    q('#prefConnecte').textContent = T('Connecté :') + ' ' + _nomUtilisateur()
+      + (m ? '' : ' — ' + T('aucun identifiant enregistré'));
+  };
   const montrer = n => {
     _ongletPref = n;
     try { localStorage.setItem('aslweb.ongletPreferences', n); } catch(e){}
@@ -85,10 +110,28 @@ function ouvrirPreferences(onglet){
     lire();
   });
   for(const u of ['MF', 'MP']) q(`[data-mvt="${u}"]`).addEventListener('change', e => reglerDecompte(u, e.target.checked));
+  // Utilisateur : contrôlé comme dans la boîte d'identification.
+  const err = q('#prefErr');
+  q('#prefVoirMdp').addEventListener('change', e => { q('#prefMdp').type = e.target.checked ? 'text' : 'password'; });
+  q('#prefConnecter').addEventListener('click', () => {
+    const r = connecterIdentifiants(q('#prefNom').value, q('#prefMdp').value);
+    err.textContent = r.erreur || '';
+    if(!r.erreur){ lireIdent(); err.textContent = ''; q('#prefConnecte').textContent += ' ✓'; }
+  });
+  for(const c of [q('#prefNom'), q('#prefMdp')])
+    c.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); q('#prefConnecter').click(); } });
+  q('#prefOublier').addEventListener('click', () => {
+    oublierIdentifiants();
+    err.textContent = '';
+    lireIdent();
+    chatLog('🗑 ' + T('Identifiants effacés de ce poste : la prochaine carte ouverte demandera l\'identification'));
+  });
+  q('#prefGerer').addEventListener('click', () => { w.remove(); gererUtilisateurs(); });
   const fermer = () => w.remove();
   q('#prefFermer').addEventListener('click', fermer);
   w.addEventListener('keydown', e => { if(e.key === 'Escape'){ e.stopPropagation(); fermer(); } });
   lire();
+  lireIdent();
   montrer(_ongletPref);
   if(_profil === 'pc') setTimeout(() => { const b = w.querySelector('.ongletsPref .actif'); if(b) b.focus(); }, 0);
   return w;

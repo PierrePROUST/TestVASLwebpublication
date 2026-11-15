@@ -325,7 +325,7 @@ async function openGameFile(file){
     if(!await chargerPartie(texte, label, annexes)) return;
     netPartieChargee();
     // Qui joue ? Ce que l'on voit et ce que l'on peut toucher en dépend.
-    demanderUtilisateur();
+    identifierJoueur();
     // GameState.loadGame : « Replay commencing. Begin new log file? »
     proposerLog(true);
   } catch(err){
