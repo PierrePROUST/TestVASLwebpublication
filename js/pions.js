@@ -808,7 +808,7 @@ function importerPions(texte, label, annexes){
   if(iLog < 0) iLog = segs.length;
   _source = segs.slice(0, iLog).filter(s => !s.startsWith('UNDO'));
   _annexes = annexes || new Map();
-  _demasquables = lireDemasquables(_source);
+  demasquablesAuChargement(_source);
   _nomFichier = label.replace(/\.(vsav|vlog)$/i, '');
 
   const rangs = _parseStacks(_source);
@@ -1094,6 +1094,8 @@ function rejouerLog(segs){
       flareDistant(s);
     } else if(_appliquerLien(s)){
       n++;
+    } else if(s.startsWith(UNMASK)){
+      recevoirDemasquables(s);
     } else if(s.startsWith('INFO\t')){
       _infoEtat = s.substring(5); majChampsInfo();
       n++;

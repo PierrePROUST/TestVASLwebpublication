@@ -62,9 +62,9 @@ function lireDemasquables(segs){
 }
 // Réécrit la commande UNMASK de l'état chargé, d'où partent .vsav et .vlog.
 function _ecrireDemasquables(){
-  if(!_source) return;
-  const i = _source.findIndex(x => x.startsWith(UNMASK));
   const seg = UNMASK + [..._demasquables].map(x => x.replace(/\t/g, '\\\t')).join('\t');
+  if(!_source) return seg;
+  const i = _source.findIndex(x => x.startsWith(UNMASK));
   if(i >= 0) _source[i] = seg;
   else {
     const iFin = _source.lastIndexOf('end_save');
@@ -76,6 +76,7 @@ function _ecrireDemasquables(){
     if(j >= 0) _logDepart[j] = seg;
     else { const jFin = _logDepart.lastIndexOf('end_save'); _logDepart.splice(jFin >= 0 ? jFin : _logDepart.length, 0, seg); }
   }
+  return seg;
 }
 // Le joueur permet-il à l'adversaire de démasquer ses unités ? Comme
 // une préférence de VASSAL, le choix vaut aussi avant l'identification :
@@ -88,9 +89,27 @@ function permettreDemasquage(oui){
   const id = idJoueur();
   if(oui === _demasquables.has(id)) return;
   if(oui) _demasquables.add(id); else _demasquables.delete(id);
-  _ecrireDemasquables();
+  const seg = _ecrireDemasquables();
+  // allowSome : la liste part aussitôt aux autres joueurs de la salle
+  // (sendToOthers, SetAllowed), sans entrer dans le log.
+  if(typeof _net !== 'undefined' && _net && typeof _netAuxAutres === 'function') _netAuxAutres(_net, seg);
   chatLog(oui ? '🔓 Vos adversaires peuvent démasquer vos unités dissimulées'
               : '🔒 Vos adversaires ne peuvent plus démasquer vos unités dissimulées');
+}
+// SetAllowed reçu d'un autre joueur : sa liste remplace la nôtre
+// (SetAllowed.executeCommand), et la partie la garde.
+function recevoirDemasquables(seg){
+  _demasquables = lireDemasquables([seg]);
+  _ecrireDemasquables();
+}
+// Partie ouverte ou reçue (ObscurableOptions.setup(true)) : la liste du
+// fichier, plus le joueur identifié si sa préférence le permet.
+function demasquablesAuChargement(segs){
+  _demasquables = lireDemasquables(segs);
+  if((_utilisateur || _admin) && _lireLocal(CLE_DEMASQUABLE, '0') === '1' && !_demasquables.has(idJoueur())){
+    _demasquables.add(idJoueur());
+    _ecrireDemasquables();
+  }
 }
 // Unité dissimulée par un autre joueur qui l'a permis : seule la commande
 // Conceal lui reste (Obscurable.keyEvent → myKeyEvent).
