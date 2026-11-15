@@ -537,6 +537,47 @@ function _vcaPion(p){
   const te = tePion(p);
   return te ? _vcaTraits(decoderTraits(te.type), decoderTraits(te.etat)) : null;
 }
+// Côté de l'hexagone h vers lequel pointe un angle (degrés, sens horaire
+// depuis le haut de la carte) : celui dont le voisin est dans cet axe,
+// lu sur les centres des hexagones de la carte LOS, ou -1.
+function _coteDansAxe(m, h, angle){
+  const c = h.getHexCenter();
+  for(let s = 0; s < 6; s++){
+    const v = m.getAdjacentHex(h, s);
+    if(!v) continue;
+    const d = v.getHexCenter();
+    const a = Math.atan2(d.x - c.x, c.y - d.y) * 180 / Math.PI;
+    if(Math.abs((((a - angle) % 360) + 540) % 360 - 180) < 15) return s;
+  }
+  return -1;
+}
+// Orientation d'un véhicule qui entre dans un hexagone (D2.1, D2.21) :
+// il avance par l'hexagone devant son VCA, recule (Reverse déclaré) par
+// celui de derrière. Un glissé de plusieurs hexagones doit suivre l'axe,
+// sans quoi un changement de VCA manque en route. Rend l'alerte, ou null.
+// Contournements et entrées depuis le hors-carte ne sont pas contrôlés.
+function _controleVCA(m, P, Q, vca, recul){
+  if(vca === null || !P.hex || !Q.hex || P.cote || Q.cote || P.hex === Q.hex) return null;
+  const sur = (angle, max) => {
+    const s = _coteDansAxe(m, P.hex, angle);
+    if(s < 0) return 0;
+    let h = P.hex;
+    for(let k = 1; k <= max; k++){
+      h = m.getAdjacentHex(h, s);
+      if(!h) return 0;
+      if(h === Q.hex) return k;
+    }
+    return 0;
+  };
+  const avant = ((vca % 6 + 6) % 6) * 60, arriere = (avant + 180) % 360;
+  if(sur(recul ? arriere : avant, 40)) return null;
+  const voisin = _voisins(m, P.hex, Q.hex);
+  if(sur(recul ? avant : arriere, 40))
+    return recul ? "VCA : en marche arrière, mais l'hexagone entré est devant le véhicule (Marche avant ? D2.21)"
+                 : "VCA : l'hexagone entré est derrière le véhicule — déclarer Reverse (D2.21) ou tourner le VCA (D2.11)";
+  return voisin ? `VCA : l'hexagone entré n'est pas ${recul ? 'derrière' : 'devant'} le véhicule — tourner d'abord le VCA (D2.11)`
+                : `VCA : le trajet quitte l'axe du véhicule — un changement de VCA manque en route (D2.11)`;
+}
 
 // Le chemin de la phase : étapes {pos, vca, cout, lib, byp}, la première
 // sans coût. Undo ramène à la dernière étape de même position et VCA.
@@ -739,6 +780,12 @@ function compterMouvement(avant, portes, local){
       }
       continue;
     }
+    // Le VCA doit faire face à l'hexagone entré (ou lui tourner le dos en
+    // marche arrière).
+    if(veh){
+      const al = _controleVCA(m, P, Q, vca, _etatMvt(e).recul);
+      if(al) alertes.push(`${nomRapport(p)} : ${al}`);
+    }
     // Entrée depuis le hors-carte : en Motion, sans démarrage (D2.12, A2.52).
     const demarrage = veh ? _demarrer(p, e, P.cle, vca, !P.hex || _enMotion(p, a.x, a.y, groupe)) : 0;
     // Épaves et véhicules dans l'hexagone entré : +1 MP chacun, +2 au
@@ -881,6 +928,25 @@ function compterVCA(p, T, S0, S1){
   const cout = pas * (dedans || codeD ? 2 : 1);
   e.push({pos: P.cle, vca: b, cout, lib: 'VCA', byp: d.byp, etat: d.etat, recul: d.recul});
   if(_afficherMP) rapport(`${nomRapport(p)} : VCA ${_texteMP(p, cout, [demarrage && 'démarrage 1'])}`);
+  const al = _controleTCA(T, S0, S1, a, b);
+  if(al) chatLog(`⚠️ ${nomRapport(p)} : ${al}`);
+}
+// Tourelle et changement de VCA (D3.12) : le TCA tourne d'autant de
+// hexspines que le VCA et garde sa position par rapport à lui. Dessinée
+// dans le trait rotate de la caisse (cas des véhicules de VASL), la
+// tourelle suit d'elle-même ; placée hors de lui, son TCA est absolu et
+// doit avoir tourné du même nombre de crans. Rend l'alerte, ou null.
+function _controleTCA(T, S0, S1, a, b){
+  const iT = T.findIndex(t => /^turr;/.test(t));
+  const iR = T.findIndex(t => /^rotate;6;/.test(t) && /CA cw/.test(t));
+  if(iT < 0 || iR < 0 || iR < iT) return null;
+  const tca = S => parseInt((S[iT] || '').replace(/\\/g, '').split(';')[0], 10);
+  const t0 = tca(S0), t1 = tca(S1);
+  if(!(t0 > 0) || !(t1 > 0)) return null;
+  const mod = x => ((x % 6) + 6) % 6;
+  if(mod(t1 - t0) === mod(b - a)) return null;
+  const attendu = mod(t0 - 1 + (b - a)) + 1;
+  return `TCA ${t1} : la tourelle n'a pas suivi le VCA, TCA ${attendu} attendu (D3.12)`;
 }
 
 // ── Start, Stop, Reverse : commandes du menu des véhicules, avant le
