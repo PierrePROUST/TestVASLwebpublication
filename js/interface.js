@@ -207,6 +207,9 @@ const ACTIONS = {
   // ◀, la position et ▶ tout en bas.
   relectureRail: {groupe: ['lgArr', 'logPos', 'lgAv'], visible: _enRelecture},
   relectureFin:  {groupe: ['lgFin'], visible: _enRelecture},
+  // Colonne d'icônes du tactile, pendant l'enregistrement d'un log : LOS et
+  // LOS inv épinglées en tête de la colonne, hors de la roue qui défile.
+  losEpingle:    {groupe: ['los', 'losMuet'], visible: () => enregistreLog()},
   lgDebut:  {lib: 'Début du log', ico: '⏮', faire: () => allerLog(0), actif: () => _logPos > _logPlancher},
   lgArr:    {lib: () => _logPlancher > 0 && _logPos <= _logPlancher
                ? 'Un coup a été joué ici pendant la relecture : Undo pour l\'annuler' : 'Coup précédent',
@@ -755,7 +758,12 @@ DISPOSITIONS.tactile = {
       else if(nav.scrollTop > L * 1.5) nav.scrollTop -= L;
     }, {passive: true});
     setTimeout(() => { nav.scrollTop = longueur(); }, 0);
-    document.getElementById('chromeGauche').appendChild(nav);
+    // Pendant l'enregistrement d'un log, LOS et LOS inv restent affichées en
+    // permanence en tête de la colonne, du côté choisi (gauche ou droite) :
+    // la roue défile sous elles.
+    const epingle = rendreAction('losEpingle', 'rail');
+    epingle.classList.add('railEpingle');
+    document.getElementById('chromeGauche').append(epingle, nav);
     vueMobile('carte');
   }
 };
