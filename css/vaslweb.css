@@ -311,7 +311,15 @@ body:not([data-terminal=pc]) .coteOnglets button.fermeCote{display:block}
 .navGauche .groupeAct .etiqAct{width:46px;font-size:10px;text-align:center;white-space:normal;color:var(--texte)}
 :root{--railMobile:52px}
 /* Affichage tactile : la colonne d'icônes est sur la droite de l'écran. */
-body[data-terminal=tactile] #chromeGauche{display:flex;background:var(--barre);order:9}
+body[data-terminal=tactile] #chromeGauche{display:flex;flex-direction:column;background:var(--barre);order:9}
+body[data-terminal=tactile] #chromeGauche .navGauche.navBas{flex:1 1 0;min-height:0}
+/* LOS et LOS inv épinglées en tête de la colonne pendant l'enregistrement
+   d'un log : la roue défile dessous, du même côté de l'écran. */
+#chromeGauche .railEpingle{display:flex;flex-direction:column;align-items:center;gap:2px;width:var(--railMobile);
+  padding:calc(var(--marge-h) + 4px) calc(var(--marge-d) + 2px) 4px 2px;border-left:1px solid var(--bord);border-bottom:1px solid var(--bord)}
+#chromeGauche .railEpingle .act.rail{flex:0 0 46px;width:46px;height:46px;margin:0}
+#chromeGauche .railEpingle:not([hidden]) + .navGauche.navBas{padding-top:4px}
+body[data-colonne=gauche] #chromeGauche .railEpingle{padding-left:calc(var(--marge-g) + 2px);padding-right:2px;border-left:none;border-right:1px solid var(--bord)}
 /* … ou à gauche, au choix de l'utilisateur (icône ⇄ de la colonne). */
 body[data-colonne=gauche] #chromeGauche{order:0}
 body[data-colonne=gauche] .navGauche.navBas{padding-left:calc(var(--marge-g) + 2px);padding-right:2px;border-left:none;border-right:1px solid var(--bord)}
