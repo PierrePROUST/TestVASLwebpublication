@@ -8,7 +8,8 @@
 // Ok recompose la carte (SetBoards exécutée localement : ni log, ni
 // réseau) puis replace chaque pièce dans son hexagone : même board, même
 // point de l'image (recordPiecePositions / restorePiecePositions).
-// Les boutons Add overlays, Crop boards et Terrain SSR viendront ensuite.
+// Crop boards : le Cropper d'ASLBoardPicker et ASLBoard.crop. Les boutons
+// Add overlays et Terrain SSR viendront ensuite.
 // ═══════════════════════════════════════════════════════════════
 const VASL_BOARD_VERSIONS_URL =         // boardVersionURL du buildFile
   'https://raw.githubusercontent.com/vasl-developers/vasl/develop/boards/v5boardVersions.xml';
@@ -91,17 +92,30 @@ function nomDuLibelle(lib){
 }
 
 // ── État écrit d'un board (ASLBoard.getState). Un board de la carte
-// garde le sien mot pour mot, place et retournement mis à jour ; un board
-// neuf n'a que sa place, son nom et sa version.
+// garde le sien mot pour mot, place et retournement mis à jour, et son
+// recadrage s'il a été refait ; un board neuf n'a que sa place, son nom,
+// son recadrage et sa version.
+//   x \t y \t [r]NOM \t [cropX \t cropY \t cropW \t cropH \t] VER \t v \t … [\t FH \t true]
+function _champsCrop(b){
+  const c = b.crop;
+  return c && (c.w > 0 || c.h > 0) ? `${c.x}\t${c.y}\t${c.w}\t${c.h}\t` : '';
+}
+const _champFH = b => b.fh ? '\tFH\ttrue' : '';
 function etatBoard(b){
   const r = b.reversed ? 'r' : '';
   if(b.etat){
     const t = b.etat.split('\t');
     t[0] = String(b.col); t[1] = String(b.row); t[2] = r + b.nomEcrit;
-    return t.join('\t');
+    if(!b.cropModifie) return t.join('\t');
+    // Recadré dans le dialogue : les quatre champs du recadrage et le FH
+    // final sont réécrits, le reste (VER, OVR, SSR, ZOOM) ne bouge pas.
+    let reste = t.slice(3);
+    if(reste.length >= 4 && reste.slice(0, 4).every(v => /^-?\d+$/.test(v))) reste = reste.slice(4);
+    const suite = reste.join('\t').replace(/\tFH\t(true|false)/g, '');
+    return t.slice(0, 3).join('\t') + '\t' + _champsCrop(b) + suite + _champFH(b);
   }
   const g = geoBoard(b);
-  return `${b.col}\t${b.row}\t${r}${g.nomImage || b.name}\tVER\t${g.version || '0.0'}\t`;
+  return `${b.col}\t${b.row}\t${r}${g.nomImage || b.name}\t${_champsCrop(b)}VER\t${g.version || '0.0'}\t${_champFH(b)}`;
 }
 // ASLBoardPicker.encode
 const segmentBoards = boards => 'bd\t' + boards.map(etatBoard).join('bd\t');
@@ -119,10 +133,15 @@ function _copieBoard(b){
           zoom: b.zoom || 1, ssrList: (b.ssrList || []).slice(),
           overlays: (b.overlays || []).map(o => Object.assign({}, o)),
           etat: b.etat || null, nomEcrit: b.etat ? (b.nomEcrit || _nomEcrit(b)) : null,
-          _comp: b._comp || null};
+          fh: !!b.fh, cropModifie: !!b.cropModifie,
+          // Image composée de la carte (recadrée), et le recadrage qu'elle suit.
+          _comp: b._comp || null, _compCrop: b._comp ? (b.hasOwnProperty('_compCrop') ? b._compCrop : b.crop) : null,
+          _compPlein: b._compPlein || null};
 }
 const _boardNeuf = nom => ({name: nom, reversed: false, crop: null, zoom: 1, ssrList: [], overlays: [],
-                            etat: null, nomEcrit: null, _comp: null});
+                            etat: null, nomEcrit: null, fh: false, cropModifie: false,
+                            _comp: null, _compCrop: null, _compPlein: null});
+const _memeCrop = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
 
 // ═══ LE DIALOGUE ═══
 let _bp = null;            // dialogue ouvert
@@ -148,6 +167,7 @@ function ouvrirChoixBoards(){
           <button type="button" data-bp="ligne">Add row</button>
           <button type="button" data-bp="colonne">Add column</button>
           <button type="button" data-bp="vider">Clear</button>
+          <button type="button" data-bp="rogner">Crop boards</button>
         </div>
         <div class="bpDefile"><div class="bpGrille"></div></div>
       </div>
@@ -167,6 +187,7 @@ function ouvrirChoixBoards(){
   q('ligne').onclick = () => { _bpAjouterLigne(); _bpRendre(); };
   q('colonne').onclick = () => { _bpAjouterColonne(); _bpRendre(); };
   q('vider').onclick = () => { _bpReset(); _bpRendre(); };
+  q('rogner').onclick = () => ouvrirRognage();
   q('annuler').onclick = () => fermerChoixBoards();
   q('ok').onclick = () => validerChoixBoards();
   // getControls : reset(), puis setBoards(map.getBoards()).
@@ -182,6 +203,7 @@ function ouvrirChoixBoards(){
 
 function fermerChoixBoards(){
   if(!_bp) return;
+  fermerRognage();
   for(const c of _bp.cases) _bpOublierCase(c);
   clearInterval(_bp.etatMin);
   _bp.w.remove(); _bp.voile.remove();
@@ -367,11 +389,22 @@ async function _bpApercu(c){
   const fini = s => { if(gen !== c.gen || !_bp) return false; clearInterval(_bp.etatMin); _bpEtat(s); return true; };
   try {
     const g = await chargerGeoBoard(nom);
-    let src = b._comp, sx = 0, sy = 0;
+    let src = null, sx = 0, sy = 0;
     const sw = (b.crop && b.crop.w > 0) ? b.crop.w : g.w, sh = (b.crop && b.crop.h > 0) ? b.crop.h : g.h;
-    if(!src){
-      src = new Image();
-      await new Promise((res, rej) => { src.onload = res; src.onerror = () => rej(new Error('bd' + nom + '.gif illisible')); _fetchBoardImage(nom).then(u => src.src = u, rej); });
+    // L'image composée de la carte vaut tant que le recadrage n'a pas
+    // changé ; sinon, l'image entière, découpée ici : composée elle aussi
+    // (une fois) si le board a des SSR ou des overlays.
+    if(b._comp && _memeCrop(b._compCrop, b.crop)) src = b._comp;
+    else {
+      if(b._compPlein) src = b._compPlein;
+      else {
+        const im = new Image();
+        await new Promise((res, rej) => { im.onload = res; im.onerror = () => rej(new Error('bd' + nom + '.gif illisible')); _fetchBoardImage(nom).then(u => im.src = u, rej); });
+        src = im;
+        if((b.ssrList || []).length || (b.overlays || []).length){
+          src = b._compPlein = await composerBoard(Object.assign({}, b, {crop: null, _comp: null, _compPlein: null}), im);
+        }
+      }
       if(b.crop){ sx = b.crop.x || 0; sy = b.crop.y || 0; }
     }
     if(gen !== c.gen) return;
@@ -425,7 +458,7 @@ async function appliquerBoards(boards, releve){
     selectionner([]);
     chatLog('🗺️ Pick new boards — boards : '
       + boards.map(b => b.name + (b.reversed ? ' (retourné)' : '')).join(', '));
-    for(const b of boards) delete b._comp;
+    for(const b of boards){ delete b._comp; delete b._compCrop; delete b._compPlein; }
     await _renderBoards(boards);
     const n = restaurerPions(boards, releve);
     if(releve.length) chatLog(`♟️ ${n} pion(s) replacé(s) sur leur board` + (n < releve.length ? `, ${releve.length - n} laissé(s) en place (board retiré)` : ''));
@@ -476,4 +509,118 @@ function restaurerPions(boards, releve){
     n++;
   }
   return n;
+}
+
+// ═══ CROP BOARDS — ASLBoardPicker.Cropper ═══
+// Fenêtre modale au-dessus du dialogue : le board (liste prise à
+// l'ouverture, dans l'ordre de getBoardsFromControls ; deux boards du
+// même nom se distinguent par leur rang), Hexrows de–à, Coords de–à,
+// « Crop to middle of hex row » (choisi par défaut) ou « Crop to nearest
+// full hex row », Crop et Done. Crop, ou Entrée dans un champ, recadre
+// puis vide les champs ; une saisie invalide ne fait rien, sans message.
+let _rg = null;
+
+function ouvrirRognage(){
+  if(!_bp || _rg) return;
+  const noms = _bpBoardsControles().map(b => b.name);
+  const voile = document.createElement('div');
+  voile.className = 'voile voileRognage';
+  const w = document.createElement('div');
+  w.className = 'fenetre fenRognage';
+  w.setAttribute('role', 'dialog');
+  w.setAttribute('aria-modal', 'true');
+  w.setAttribute('aria-label', 'Crop boards');
+  w.innerHTML = `<div class="ft">Crop boards</div><div class="fc">
+      <label class="rgLigne">Board: <select data-rg="board"></select></label>
+      <div class="rgLigne"><span>Hexrows:</span><input data-rg="row1" size="2" autocomplete="off" spellcheck="false" aria-label="Hexrows from"><span>-</span><input data-rg="row2" size="2" autocomplete="off" spellcheck="false" aria-label="Hexrows to"></div>
+      <div class="rgLigne"><span>Coords:</span><input data-rg="coord1" size="2" autocomplete="off" spellcheck="false" aria-label="Coords from"><span>-</span><input data-rg="coord2" size="2" autocomplete="off" spellcheck="false" aria-label="Coords to"></div>
+      <label class="coche"><input type="radio" name="rgMode" data-rg="demi" checked><span>Crop to middle of hex row</span></label>
+      <label class="coche"><input type="radio" name="rgMode" data-rg="plein"><span>Crop to nearest full hex row</span></label>
+      <div class="fb"><button type="button" class="prim" data-rg="crop">Crop</button><button type="button" data-rg="done">Done</button></div>
+    </div>`;
+  const sel = w.querySelector('[data-rg="board"]');
+  noms.forEach((n, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = n; sel.appendChild(o); });
+  document.body.append(voile, w);
+  _rg = {w, voile};
+  const q = s => w.querySelector(`[data-rg="${s}"]`);
+  w.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if(e.key === 'Escape'){ e.preventDefault(); fermerRognage(); }
+    else if(e.key === 'Enter' && e.target.matches('input:not([type=radio])')){ e.preventDefault(); rogner(); }
+  });
+  w.addEventListener('pointerdown', e => e.stopPropagation());
+  voile.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+  _deplacableParTitre(w);
+  q('crop').onclick = () => rogner();
+  q('done').onclick = () => fermerRognage();
+  setTimeout(() => { if(_profil === 'pc') q('row1').focus(); }, 0);
+
+  function rogner(){
+    const v = s => q(s).value.toLowerCase().trim();
+    try {
+      const c = _bpCaseDuRang(sel.selectedIndex);
+      cropBoard(c.board, v('row1'), v('row2'), v('coord1'), v('coord2'), q('plein').checked);
+      _bpApercu(c);
+    } catch(e){ /* comme VASL : rien */ }
+    for(const s of ['row1', 'row2', 'coord1', 'coord2']) q(s).value = '';
+  }
+}
+function fermerRognage(){
+  if(!_rg) return;
+  _rg.w.remove(); _rg.voile.remove();
+  _rg = null;
+}
+
+// getBoardsFromControls : les boards des cases, colonne par colonne.
+function _bpBoardsControles(){
+  const out = [];
+  for(let i = 0; i < _bp.nx; i++) for(let j = 0; j < _bp.ny; j++){
+    const c = _bp.cases[i + _bp.nx * j];
+    if(c && c.board) out.push(c.board);
+  }
+  return out;
+}
+// ASLBoardPicker.newmatch : la case du y-ième board, cherchée parmi les
+// premières cases seulement (autant que de boards). Avec une case vide
+// avant lui dans la grille, le board n'est pas trouvé et le recadrage
+// échoue, comme dans VASL.
+function _bpCaseDuRang(y){
+  const boards = _bpBoardsControles(), b = boards[y];
+  for(let i = 0; i < boards.length; i++) if(b && _bp.cases[i] && _bp.cases[i].board === b) return _bp.cases[i];
+  throw new Error('board introuvable');
+}
+
+// ASLBoard.crop : bornes en pixels de l'image non recadrée, d'après les
+// centres des hexagones (HexGrid.getLocation). Une borne vide garde le
+// bord du board (largeur ou hauteur -1 : jusqu'au bout). Lève une erreur
+// sur un nom d'hexagone invalide.
+function cropBoard(b, row1, row2, coord1, coord2, nearestFullRow){
+  const g = geoBoard(b), dx = g.hw, dy = g.hh;
+  const loc = n => {
+    const p = centreHex(g, n);
+    if(!p) throw new Error('hexagone ' + n + ' invalide');
+    return p;
+  };
+  const r = {x: 0, y: 0, w: -1, h: -1};
+  r.x = row1.length === 0 ? 0 : loc(row1 + '0').x;
+  r.w = row2.length === 0 ? -1 : loc(row2 + '0').x - r.x;
+  r.y = coord1.length === 0 ? 0 : loc('a' + coord1).y - Math.trunc(dy / 2);
+  // « hack to fix problem with RB cropping »
+  if(dy === 64.47 || dy === 64.4528){
+    if(coord1 === '') coord1 = '0';
+    if(!/^[+-]?\d+$/.test(coord1)) throw new Error('coord ' + coord1);
+    r.y += Math.ceil(parseInt(coord1, 10) / 10);
+  }
+  r.h = coord2.length === 0 ? -1 : loc('a' + coord2).y + Math.trunc(dy / 2) - r.y;
+  if(nearestFullRow){
+    if(r.w > 0 && Math.abs(r.x + r.w - g.w) > dx / 4) r.w += Math.trunc(dx / 2);
+    if(r.x !== 0){
+      r.x -= Math.trunc(dx / 2);
+      r.w += Math.trunc(dx / 2);
+    }
+  }
+  b.crop = r.x === 0 && r.y === 0 && r.w <= 0 && r.h <= 0 ? null : r;
+  b.fh = !!nearestFullRow;
+  b.cropModifie = true;
+  return b.crop;
 }

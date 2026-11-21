@@ -781,3 +781,14 @@ body:not([data-terminal=pc]) .fenBoards .bpOutils button{flex:1;min-height:44px}
 body:not([data-terminal=pc]) .fenBoards .bpChoix .bpRech,
 body:not([data-terminal=pc]) .fenBoards .bpChoix .bpListe{min-height:44px;font-size:16px}
 body:not([data-terminal=pc]) .fenBoards label.bpFlip{min-height:44px;font-size:15px}
+/* Crop boards : fenêtre modale au-dessus du dialogue des boards. */
+.voile.voileRognage{z-index:9850}
+.fenetre.fenRognage{z-index:9860;width:min(92vw,330px)}
+.fenRognage .ft{cursor:move;user-select:none;touch-action:none}
+.fenRognage .rgLigne{display:flex;flex-direction:row;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;color:var(--menu-texte)}
+.fenRognage .rgLigne > span:first-child{min-width:64px}
+.fenRognage .rgLigne input{width:56px}
+.fenRognage .rgLigne select{flex:1}
+body:not([data-terminal=pc]) .fenRognage .ft{cursor:default}
+body:not([data-terminal=pc]) .fenRognage .rgLigne input,
+body:not([data-terminal=pc]) .fenRognage .rgLigne select{min-height:44px;font-size:16px}

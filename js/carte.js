@@ -34,7 +34,9 @@ function _parseBoardSegment(text){
       overlays: _parseOverlays(part),
       // État tel qu'écrit (ASLBoard.getState) : « Pick new boards » le
       // réécrit tel quel, seules la place et le retournement changeant.
-      etat: part.replace(/\\+$/, '')
+      etat: part.replace(/\\+$/, ''),
+      // nearestFullRow (« FH », ASLBoardPicker.buildBoard : bd.contains("FH")).
+      fh: /\tFH\t/.test(part)
     });
   }
   return out;
