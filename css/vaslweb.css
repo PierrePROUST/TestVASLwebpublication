@@ -792,3 +792,12 @@ body:not([data-terminal=pc]) .fenBoards label.bpFlip{min-height:44px;font-size:1
 body:not([data-terminal=pc]) .fenRognage .ft{cursor:default}
 body:not([data-terminal=pc]) .fenRognage .rgLigne input,
 body:not([data-terminal=pc]) .fenRognage .rgLigne select{min-height:44px;font-size:16px}
+/* Add overlays : Overlay, Board, Hex 1, Hex 2 côte à côte, état au-dessus. */
+.fenetre.fenOverlays{width:min(94vw,440px)}
+.fenOverlays .ovEtat{min-height:18px;margin-bottom:8px;text-align:center;color:var(--menu-texte)}
+.fenOverlays .ovChamps{display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:6px}
+.fenOverlays .ovChamps label{margin-bottom:8px;min-width:0}
+.fenOverlays .ovChamps input,.fenOverlays .ovChamps select{width:100%;min-width:0;box-sizing:border-box}
+body:not([data-terminal=pc]) .fenOverlays .ovChamps{grid-template-columns:1fr 1fr}
+body:not([data-terminal=pc]) .fenOverlays .ovChamps input,
+body:not([data-terminal=pc]) .fenOverlays .ovChamps select{min-height:44px;font-size:16px}

@@ -8,8 +8,9 @@
 // Ok recompose la carte (SetBoards exécutée localement : ni log, ni
 // réseau) puis replace chaque pièce dans son hexagone : même board, même
 // point de l'image (recordPiecePositions / restorePiecePositions).
-// Crop boards : le Cropper d'ASLBoardPicker et ASLBoard.crop. Les boutons
-// Add overlays et Terrain SSR viendront ensuite.
+// Crop boards : le Cropper d'ASLBoardPicker et ASLBoard.crop. Add overlays :
+// l'Overlayer, ASLBoardSlot.addOverlay / checkOverlap et Overlay. Terrain
+// SSR viendra ensuite.
 // ═══════════════════════════════════════════════════════════════
 const VASL_BOARD_VERSIONS_URL =         // boardVersionURL du buildFile
   'https://raw.githubusercontent.com/vasl-developers/vasl/develop/boards/v5boardVersions.xml';
@@ -106,16 +107,37 @@ function etatBoard(b){
   if(b.etat){
     const t = b.etat.split('\t');
     t[0] = String(b.col); t[1] = String(b.row); t[2] = r + b.nomEcrit;
-    if(!b.cropModifie) return t.join('\t');
-    // Recadré dans le dialogue : les quatre champs du recadrage et le FH
-    // final sont réécrits, le reste (VER, OVR, SSR, ZOOM) ne bouge pas.
-    let reste = t.slice(3);
-    if(reste.length >= 4 && reste.slice(0, 4).every(v => /^-?\d+$/.test(v))) reste = reste.slice(4);
-    const suite = reste.join('\t').replace(/\tFH\t(true|false)/g, '');
-    return t.slice(0, 3).join('\t') + '\t' + _champsCrop(b) + suite + _champFH(b);
+    let etat = t.join('\t');
+    if(b.cropModifie){
+      // Recadré dans le dialogue : les quatre champs du recadrage et le FH
+      // final sont réécrits, le reste (VER, OVR, SSR, ZOOM) ne bouge pas.
+      let reste = t.slice(3);
+      if(reste.length >= 4 && reste.slice(0, 4).every(v => /^-?\d+$/.test(v))) reste = reste.slice(4);
+      const suite = reste.join('\t').replace(/\tFH\t(true|false)/g, '');
+      etat = t.slice(0, 3).join('\t') + '\t' + _champsCrop(b) + suite + _champFH(b);
+    }
+    return b.ovrModifie ? _remplacerOVR(etat, b.overlays) : etat;
   }
   const g = geoBoard(b);
-  return `${b.col}\t${b.row}\t${r}${g.nomImage || b.name}\t${_champsCrop(b)}VER\t${g.version || '0.0'}\t${_champFH(b)}`;
+  return `${b.col}\t${b.row}\t${r}${g.nomImage || b.name}\t${_champsCrop(b)}VER\t${g.version || '0.0'}\t`
+    + (b.overlays || []).map(o => `OVR\t${o.nom}\t${o.hex1}\t${o.hex2}\t`).join('') + _champFH(b);
+}
+
+// Overlays changés dans le dialogue : chaque « OVR nom hex1 hex2 » est
+// retiré, puis la liste entière est écrite à sa place dans getState —
+// après « VER v » et les champs vides des images SSR (SSROverlay, placées
+// en tête de liste, s'écrivent ""), avant « SSR ».
+function _remplacerOVR(etat, overlays){
+  const t = etat.split('\t'), out = [];
+  for(let i = 0; i < t.length; i++){
+    if(i >= 3 && t[i] === 'OVR'){ i += 3; continue; }
+    out.push(t[i]);
+  }
+  let k = out.indexOf('VER', 3);
+  k = k < 0 ? Math.min(out.length, /^-?\d+$/.test(out[3] || '') ? 7 : 3) : k + 2;
+  while(k < out.length - 1 && out[k] === '') k++;
+  out.splice(k, 0, ...overlays.flatMap(o => ['OVR', o.nom, o.hex1, o.hex2]));
+  return out.join('\t');
 }
 // ASLBoardPicker.encode
 const segmentBoards = boards => 'bd\t' + boards.map(etatBoard).join('bd\t');
@@ -133,13 +155,13 @@ function _copieBoard(b){
           zoom: b.zoom || 1, ssrList: (b.ssrList || []).slice(),
           overlays: (b.overlays || []).map(o => Object.assign({}, o)),
           etat: b.etat || null, nomEcrit: b.etat ? (b.nomEcrit || _nomEcrit(b)) : null,
-          fh: !!b.fh, cropModifie: !!b.cropModifie,
+          fh: !!b.fh, cropModifie: !!b.cropModifie, ovrModifie: !!b.ovrModifie,
           // Image composée de la carte (recadrée), et le recadrage qu'elle suit.
           _comp: b._comp || null, _compCrop: b._comp ? (b.hasOwnProperty('_compCrop') ? b._compCrop : b.crop) : null,
           _compPlein: b._compPlein || null};
 }
 const _boardNeuf = nom => ({name: nom, reversed: false, crop: null, zoom: 1, ssrList: [], overlays: [],
-                            etat: null, nomEcrit: null, fh: false, cropModifie: false,
+                            etat: null, nomEcrit: null, fh: false, cropModifie: false, ovrModifie: false,
                             _comp: null, _compCrop: null, _compPlein: null});
 const _memeCrop = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
 
@@ -167,6 +189,7 @@ function ouvrirChoixBoards(){
           <button type="button" data-bp="ligne">Add row</button>
           <button type="button" data-bp="colonne">Add column</button>
           <button type="button" data-bp="vider">Clear</button>
+          <button type="button" data-bp="overlays">Add overlays</button>
           <button type="button" data-bp="rogner">Crop boards</button>
         </div>
         <div class="bpDefile"><div class="bpGrille"></div></div>
@@ -188,6 +211,7 @@ function ouvrirChoixBoards(){
   q('colonne').onclick = () => { _bpAjouterColonne(); _bpRendre(); };
   q('vider').onclick = () => { _bpReset(); _bpRendre(); };
   q('rogner').onclick = () => ouvrirRognage();
+  q('overlays').onclick = () => ouvrirOverlays();
   q('annuler').onclick = () => fermerChoixBoards();
   q('ok').onclick = () => validerChoixBoards();
   // getControls : reset(), puis setBoards(map.getBoards()).
@@ -204,6 +228,7 @@ function ouvrirChoixBoards(){
 function fermerChoixBoards(){
   if(!_bp) return;
   fermerRognage();
+  fermerOverlays();
   for(const c of _bp.cases) _bpOublierCase(c);
   clearInterval(_bp.etatMin);
   _bp.w.remove(); _bp.voile.remove();
@@ -521,7 +546,7 @@ function restaurerPions(boards, releve){
 let _rg = null;
 
 function ouvrirRognage(){
-  if(!_bp || _rg) return;
+  if(!_bp || _rg || _ov) return;
   const noms = _bpBoardsControles().map(b => b.name);
   const voile = document.createElement('div');
   voile.className = 'voile voileRognage';
@@ -623,4 +648,207 @@ function cropBoard(b, row1, row2, coord1, coord2, nearestFullRow){
   b.fh = !!nearestFullRow;
   b.cropModifie = true;
   return b.crop;
+}
+
+// ═══ ADD OVERLAYS — ASLBoardPicker.Overlayer ═══
+// Overlay, Board (liste prise à l'ouverture), Hex 1, Hex 2, Add et Done ;
+// la ligne d'état dit le résultat. Add, ou Entrée dans un champ, puis les
+// trois champs se vident. Hexagones vides : l'overlay de ce nom est retiré
+// du board ; un seul hexagone : les deux sont égaux.
+// « Preserve Board Elevation » (Overlay.transform, ASLPersistElevation)
+// n'est pas repris ici.
+let _ov = null;
+
+function ouvrirOverlays(){
+  if(!_bp || _ov || _rg) return;
+  const noms = _bpBoardsControles().map(b => b.name);
+  const voile = document.createElement('div');
+  voile.className = 'voile voileRognage';
+  const w = document.createElement('div');
+  w.className = 'fenetre fenRognage fenOverlays';
+  w.setAttribute('role', 'dialog');
+  w.setAttribute('aria-modal', 'true');
+  w.setAttribute('aria-label', 'Overlays');
+  w.innerHTML = `<div class="ft">Overlays</div><div class="fc">
+      <div class="ovEtat" aria-live="polite">Enter blank hexes to delete.</div>
+      <div class="ovChamps">
+        <label>Overlay<input data-ov="nom" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+        <label>Board<select data-ov="board"></select></label>
+        <label>Hex 1<input data-ov="hex1" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+        <label>Hex 2<input data-ov="hex2" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+      </div>
+      <div class="fb"><button type="button" class="prim" data-ov="add">Add</button><button type="button" data-ov="done">Done</button></div>
+    </div>`;
+  const sel = w.querySelector('[data-ov="board"]');
+  noms.forEach((n, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = n; sel.appendChild(o); });
+  document.body.append(voile, w);
+  _ov = {w, voile};
+  const q = s => w.querySelector(`[data-ov="${s}"]`);
+  const etat = t => { q('add').closest('.fc').querySelector('.ovEtat').textContent = t; };
+  w.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if(e.key === 'Escape'){ e.preventDefault(); fermerOverlays(); }
+    else if(e.key === 'Enter' && e.target.matches('input')){ e.preventDefault(); ajouter(); }
+  });
+  w.addEventListener('pointerdown', e => e.stopPropagation());
+  voile.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+  _deplacableParTitre(w);
+  q('add').onclick = () => ajouter();
+  q('done').onclick = () => fermerOverlays();
+  setTimeout(() => { if(_profil === 'pc') q('nom').focus(); }, 0);
+
+  let enCours = false;
+  async function ajouter(){
+    if(enCours) return;
+    const nom = q('nom').value.toLowerCase(), h1 = q('hex1').value.toLowerCase(), h2 = q('hex2').value.toLowerCase();
+    let c;
+    try { c = _bpCaseDuRang(sel.selectedIndex); } catch(e){ c = null; }
+    if(!c){
+      for(const s of ['nom', 'hex1', 'hex2']) q(s).value = '';
+      etat('Missing board: fix Map Config.');
+      return;
+    }
+    enCours = true;
+    q('add').disabled = true;
+    etat('Working ...');
+    let msg;
+    try { msg = await ajouterOverlay(c, nom, h1, h2); }
+    catch(e){ msg = e.message; }
+    finally { enCours = false; q('add').disabled = false; }
+    if(_ov && _ov.w === w) etat(msg);
+    for(const s of ['nom', 'hex1', 'hex2']) q(s).value = '';
+  }
+}
+function fermerOverlays(){
+  if(!_ov) return;
+  _ov.w.remove(); _ov.voile.remove();
+  _ov = null;
+}
+
+// Le board d'une case a changé d'overlays : son état les réécrira, son
+// aperçu se recompose.
+function _bpOverlaysChanges(c){
+  const b = c.board;
+  b.ovrModifie = true;
+  b._comp = b._compPlein = null;
+  _bpApercu(c);
+}
+
+// ASLBoardSlot.addOverlay. Rend le message de la ligne d'état ; une
+// erreur porte le message de VASL (BoardException).
+async function ajouterOverlay(c, nom, hex1, hex2){
+  const b = c.board;
+  if(hex1 === '' && hex2 === ''){
+    const avant = b.overlays.length;
+    b.overlays = b.overlays.filter(o => o.nom !== nom);
+    if(b.overlays.length !== avant) _bpOverlaysChanges(c);
+    return 'Removed Overlay ' + nom;
+  }
+  if(hex2.length === 0) hex2 = hex1;
+  if(hex1.length === 0) hex1 = hex2;
+  await chargerGeoBoard(b.name);
+  const o = await construireOverlay(b, nom, hex1, hex2);
+  b.overlays.push({nom: o.nom, hex1: o.hex1, hex2: o.hex2});
+  _bpOverlaysChanges(c);
+  await _checkOverlap(c, o);
+  return `Added Overlay ${o.nom} (ver ${o.version})`;
+}
+
+// new Overlay(« nom \t hex1 \t hex2 », board) : readData (origines,
+// version, placeAt), setBounds, puis check — dans cet ordre, avec leurs
+// messages. Les bornes sont dans le repère du board non recadré.
+async function construireOverlay(b, nom, hex1, hex2){
+  const g = geoBoard(b);
+  const arch = archiveOverlay(nom);
+  let a;
+  try { a = await chargerArchiveOverlay(arch); }
+  catch(e){ throw new Error(e.message); }
+  if(!_fichier(a.files, 'data')) throw new Error('data not found in ' + arch);
+  const d = _lireDataOverlay(a.data, nom);
+  let version = '0';
+  for(const l of a.data.split(/\r?\n/)){
+    const tk = l.trim().split(/\s+/);
+    if(tk.length >= 2 && tk[0].toLowerCase() === 'version') version = tk[1];
+  }
+  if(d.placeAt) [hex1, hex2] = d.placeAt;
+  const loc = n => { const p = centreHex(g, n); if(!p) throw new Error('Bad Hex Coordinates'); return p; };
+  const offset = c => {
+    const n = _origine(d.origines, c, b.name), p = n && centreHex(g, n);
+    if(!p) throw new Error(`Illegal orientation '${c}' for overlay ${nom}`);
+    return p;
+  };
+  const image = c => _fichier(a.files, imageOverlay(nom + c));
+  const taille = octets => (octets && octets.length > 10 && octets[0] === 0x47)
+    ? {w: octets[6] | (octets[7] << 8), h: octets[8] | (octets[9] << 8)} : null;
+  // setBounds
+  const c = _orientation(g, hex1, hex2);
+  const p1 = loc(hex1), po = offset(c);
+  const dim = taille(image(c));
+  if(!dim) throw new Error('Overlay not found in ' + arch);
+  // check
+  const unHex = !!image('a') && !image('d');
+  if(unHex){
+    if(hex2 !== hex1 && hex1.length > 0 && hex2.length > 0) throw new Error('Specify a single hex');
+  } else if(hex1.length === 0 || hex2.length === 0 || hex1 === hex2) throw new Error('Specify two hexes');
+  const p2 = loc(hex2);
+  const dx = loc('B1').x - loc('A1').x, dy = loc('B1').y - loc('B0').y;
+  if(Math.abs(p2.x - p1.x) > 1.1 * dx || Math.abs(p2.y - p1.y) > 1.1 * dy) throw new Error('Illegal coordinates');
+  return {nom, hex1, hex2, version, x: p1.x - po.x, y: p1.y - po.y, w: dim.w, h: dim.h};
+}
+
+// ASLHexGrid.locationName (sans les côtés : les points viennent de centres
+// d'hexagones) ; « offboard » hors de la grille.
+function nomHexLocal(g, p){
+  const x = p.x - g.x0, y = p.y + Math.trunc(g.hh / 2 - g.y0);
+  const i = Math.floor(x / g.hw + 0.5);
+  let r = i % 2 === 0 ? Math.floor(y / g.hh) + 1 : Math.floor(y / g.hh + 0.5);
+  if(g.alt && i % 2 !== 0) r++;
+  if(i < 0 || r < 0) return 'offboard';
+  return hexrow(i) + r;
+}
+
+// Taille affichée d'un board de la grille (bounds()).
+function _dimsBoard(b){
+  const g = geoBoard(b), z = b.zoom || 1;
+  b.dispW = Math.round(((b.crop && b.crop.w > 0) ? b.crop.w : g.w) * z);
+  b.dispH = Math.round(((b.crop && b.crop.h > 0) ? b.crop.h : g.h) * z);
+}
+
+// ASLBoardSlot.checkOverlap : un overlay qui dépasse de son board est
+// recopié sur chaque voisin de la grille qu'il touche (diagonales
+// comprises), ses hexagones traduits dans le repère du voisin. Une copie
+// impossible est ignorée sans message.
+async function _checkOverlap(c, o){
+  const b = c.board;
+  _dimsBoard(b);
+  const q = globalCoordinates(b, {x: o.x, y: o.y});
+  if(b.reversed){ q.x -= o.w; q.y -= o.h; }
+  const gauche = q.x < 0, droite = q.x + o.w > b.dispW, haut = q.y < 0, bas = q.y + o.h > b.dispH;
+  const dirs = [];
+  if(gauche){ if(haut) dirs.push([-1, -1]); dirs.push([-1, 0]); if(bas) dirs.push([-1, 1]); }
+  if(droite){ if(haut) dirs.push([1, -1]); dirs.push([1, 0]); if(bas) dirs.push([1, 1]); }
+  if(haut) dirs.push([0, -1]);
+  if(bas) dirs.push([0, 1]);
+  for(const [dx, dy] of dirs) await _overlap(c, o, dx, dy);
+}
+async function _overlap(c, o, dx, dy){
+  const i = _bp.cases.indexOf(c), x = i % _bp.nx + dx, y = Math.floor(i / _bp.nx) + dy;
+  if(x < 0 || x >= _bp.nx || y < 0 || y >= _bp.ny) return;
+  const v = _bp.cases[x + y * _bp.nx];
+  if(!v || !v.board) return;
+  const b = c.board, autre = v.board;
+  await chargerGeoBoard(autre.name);
+  _dimsBoard(b); _dimsBoard(autre);
+  const offX = dx === -1 ? autre.dispW : dx === 1 ? -b.dispW : 0;
+  const offY = dy === -1 ? autre.dispH : dy === 1 ? -b.dispH : 0;
+  const g = geoBoard(b), ga = geoBoard(autre);
+  const traduire = h => {
+    const p = globalCoordinates(b, centreHex(g, h));
+    return nomHexLocal(ga, localCoordinates(autre, {x: p.x + offX, y: p.y + offY}));
+  };
+  try {
+    const n = await construireOverlay(autre, o.nom, traduire(o.hex1), traduire(o.hex2));
+    autre.overlays.push({nom: n.nom, hex1: n.hex1, hex2: n.hex2});
+    _bpOverlaysChanges(v);
+  } catch(e){ /* BoardException : ignorée */ }
 }
