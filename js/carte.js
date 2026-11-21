@@ -733,11 +733,100 @@ function _pixelsOverlay(nom, image, x, y){
   return {nom, x, y, w: c.width, h: c.height, data: g.getImageData(0, 0, c.width, c.height).data};
 }
 
+// ═══ PRESERVE BOARD ELEVATION ═══ (Overlay.transform, getOGLevel)
+// Propriété de module PersistElevation (LOS.PERSIST_ELEVATION_PROPERTY),
+// gardée dans la partie : à true, chaque overlay posé garde le niveau du
+// board là où il ne montre qu'un terrain découvert.
+const persistElevationActive = () => typeof _globales !== 'undefined' && _globales.PersistElevation === 'true';
+
+// Couleurs et terrains partagés (SharedBoardMetadata.xml), une fois.
+let _metaPersist = null, _metaPersistPret = null;
+function metaPersist(){
+  if(!_metaPersist){
+    _metaPersist = textePartage().then(t => {
+      const {parNom, parRgb} = lireCouleursLOS(t, null);
+      return _metaPersistPret = {parNom, parRgb, terrains: lireTerrainsLOS(t).terrains};
+    });
+    _metaPersist.catch(() => { _metaPersist = null; });
+  }
+  return _metaPersist;
+}
+// Pixels de l'image du board (non recadrée, sans SSR : getBoardImage).
+const _pixelsBoards = new Map();
+function pixelsBoard(nom, img){
+  if(!_pixelsBoards.has(nom)){
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || img.width; c.height = img.naturalHeight || img.height;
+    const g = c.getContext('2d', {willReadFrequently:true});
+    g.drawImage(img, 0, 0);
+    _pixelsBoards.set(nom, g.getImageData(0, 0, c.width, c.height));
+  }
+  return _pixelsBoards.get(nom);
+}
+// getOverlayTerrainfromColor : couleur → terrain, par les couleurs
+// partagées ; null pour une couleur inconnue ou un terrain UNKNOWN.
+function _terrainPersist(meta, rgb){
+  const n = meta.parRgb.get(rgb), e = n && meta.parNom.get(n);
+  if(!e || e.terrain === 'UNKNOWN') return null;
+  return meta.terrains.get(e.terrain) || null;
+}
+// getOGLevel : dans un rayon de 3 pixels autour de (x, y), ligne par
+// ligne, la première couleur du board dont le terrain est découvert (ou
+// toute couleur pour un overlay « og ») ; une couleur sans terrain arrête
+// la recherche (NullPointerException rattrapée dans VASL) : transparent.
+const _TRANSPARENT = -1;
+function ogLevel(meta, bd, x, y, og){
+  const x0 = Math.max(0, x - 3), x1 = Math.min(bd.width - 1, x + 3);
+  const y0 = Math.max(0, y - 3), y1 = Math.min(bd.height - 1, y + 3);
+  for(let py = y0; py <= y1; py++) for(let px = x0; px <= x1; px++){
+    if((px - x) * (px - x) + (py - y) * (py - y) > 9) continue;
+    const k = (py * bd.width + px) * 4, rgb = bd.data[k] << 16 | bd.data[k+1] << 8 | bd.data[k+2];
+    const t = _terrainPersist(meta, rgb);
+    if(!t) return _TRANSPARENT;
+    if(t.getLOSCategory() === 'OPEN' || og) return rgb;
+  }
+  return _TRANSPARENT;
+}
+// Overlay.transform(true) : chaque pixel opaque de terrain découvert
+// devient transparent (sauf overlay « og ») ; si le board, dessous, n'est
+// pas découvert, il prend la couleur découverte la plus proche du board.
+// Un point hors du board reste transparent (VASL y lèverait une erreur).
+async function transformerOverlay(b, ov, imgBoard){
+  const meta = await metaPersist();
+  const bd = pixelsBoard(b.name, imgBoard);
+  const c = document.createElement('canvas');
+  c.width = ov.image.width; c.height = ov.image.height;
+  const g = c.getContext('2d', {willReadFrequently:true});
+  g.drawImage(ov.image, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+  const og = ov.nom.includes('og');
+  const poser = (k, v) => {
+    if(v === _TRANSPARENT){ px[k] = px[k+1] = px[k+2] = 255; px[k+3] = 0; }
+    else { px[k] = v >> 16; px[k+1] = (v >> 8) & 255; px[k+2] = v & 255; px[k+3] = 255; }
+  };
+  for(let cx = 0; cx < c.width; cx++) for(let cy = 0; cy < c.height; cy++){
+    const k = (cy * c.width + cx) * 4;
+    if(!px[k+3]) continue;
+    const t = _terrainPersist(meta, px[k] << 16 | px[k+1] << 8 | px[k+2]);
+    if(!t || t.getLOSCategory() !== 'OPEN' || og) continue;
+    poser(k, _TRANSPARENT);
+    const x = ov.x + cx, y = ov.y + cy;
+    if(x < 0 || y < 0 || x >= bd.width || y >= bd.height) continue;
+    const j = (y * bd.width + x) * 4;
+    const tb = _terrainPersist(meta, bd.data[j] << 16 | bd.data[j+1] << 8 | bd.data[j+2]);
+    if(tb && tb.getLOSCategory() !== 'OPEN') poser(k, ogLevel(meta, bd, x, y, og));
+  }
+  g.putImageData(d, 0, 0);
+  if(ov.image.close) ov.image.close();
+  return c;
+}
+
 // Image d'un board telle que la compose ASLBoard.BoardOp : la partie
 // visible (recadrée) au format natif, puis les motifs, les images SSR et
 // les overlays, puis le repeint des SSR sur l'ensemble. Le retournement et
 // le zoom viennent après, au dessin sur la carte.
 async function composerBoard(b, img){
+  const imageBoard = img;
   const gb = geoBoard(b);
   const sx = b.crop ? b.crop.x : 0, sy = b.crop ? b.crop.y : 0;
   const sw = (b.crop && b.crop.w > 0) ? b.crop.w : gb.w;
@@ -785,17 +874,25 @@ async function composerBoard(b, img){
   for(const o of overlays){
     try {
       const ov = await preparerOverlay(b, o);
+      // Preserve Board Elevation : l'overlay posé par « Add overlays » avec
+      // la case cochée, ou tous quand la partie a PersistElevation à true
+      // (ASLMap.adjustLOSForOverlays) ; pas les pièces de l'extension.
+      const persist = !o.piece && (!!o.persist || persistElevationActive());
+      if(persist){
+        try { ov.image = await transformerOverlay(b, ov, imageBoard); }
+        catch(e){ chatLog(`⚠️ bd${b.name} : overlay ${o.nom}, niveaux du board non préservés — ${e.message}`); }
+      }
       const img = await dessinerOverlay(b, cv, ov, tbl, voulues, sx, sy);
-      b.ovrLOS.push(Object.assign(_pixelsOverlay(o.nom, img, ov.x, ov.y), {archive: ov.archive}));
+      b.ovrLOS.push(Object.assign(_pixelsOverlay(o.nom, img, ov.x, ov.y), {archive: ov.archive, persist}));
       if(ov.x < sx || ov.y < sy || ov.x + img.width > sx + sw || ov.y + img.height > sy + sh){
         const c = document.createElement('canvas');
         c.width = img.width; c.height = img.height;
         c.getContext('2d').drawImage(img, 0, 0);
         b.ovrDebords.push({nom: o.nom, image: c, x: ov.x, y: ov.y});
       }
-      ov.image.close();
+      if(ov.image.close) ov.image.close();
       chatLog(`🧱 bd${b.name} : overlay ${o.nom} en ${o.hex1}-${o.hex2} (${ov.archive}, orientation ${ov.orientation})`
-        + (o.piece ? ` — pièce ${o.piece} de l'extension VASL Overlays` : ''));
+        + (o.piece ? ` — pièce ${o.piece} de l'extension VASL Overlays` : '') + (persist ? ' — niveaux du board préservés' : ''));
     } catch(e){
       chatLog(`⚠️ bd${b.name} : overlay ${o.nom} non posé — ${e.message}`);
     }

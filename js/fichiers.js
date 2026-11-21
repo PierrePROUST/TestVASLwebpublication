@@ -343,6 +343,10 @@ async function chargerPartie(texte, label, annexes){
   document.title = 'VASLweb 1.01 — ' + label;
   chatLog(`🗺️ ${label} — boards : `
     + boards.map(b => b.name + (b.reversed ? ' (retourné)' : '')).join(', '));
+  // PersistElevation sert à composer les boards : lu ici, avant
+  // lireGlobales (importerPions), qui le relira.
+  const pe = /(?:^|\x1b)GlobalProperty\t;PersistElevation;([^;\x1b]*);/.exec(texte);
+  _globales.PersistElevation = pe ? pe[1] : '';
   await _renderBoards(boards);
   avertirVersionsBoards(boards);
   importerPions(texte, label, annexes);

@@ -685,8 +685,9 @@ function cropBoard(b, row1, row2, coord1, coord2, nearestFullRow){
 // la ligne d'état dit le résultat. Add, ou Entrée dans un champ, puis les
 // trois champs se vident. Hexagones vides : l'overlay de ce nom est retiré
 // du board ; un seul hexagone : les deux sont égaux.
-// « Preserve Board Elevation » (Overlay.transform, ASLPersistElevation)
-// n'est pas repris ici.
+// « Preserve Board Elevation » : cochée au moment d'un Add, elle vaut pour
+// la suite du dialogue (preservelevels) ; les overlays ajoutés gardent les
+// niveaux du board, et Done active PersistElevation pour la partie.
 let _ov = null;
 
 function ouvrirOverlays(){
@@ -707,6 +708,7 @@ function ouvrirOverlays(){
         <label>Hex 1<input data-ov="hex1" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
         <label>Hex 2<input data-ov="hex2" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
       </div>
+      <label class="coche"><input type="checkbox" data-ov="preserve"><span>Preserve Board Elevation</span></label>
       <div class="fb"><button type="button" class="prim" data-ov="add">Add</button><button type="button" data-ov="done">Done</button></div>
     </div>`;
   const sel = w.querySelector('[data-ov="board"]');
@@ -724,13 +726,19 @@ function ouvrirOverlays(){
   voile.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
   _deplacableParTitre(w);
   q('add').onclick = () => ajouter();
-  q('done').onclick = () => fermerOverlays();
+  q('done').onclick = () => {
+    // ASLPersistElevation.togglePersistElevation, sur une instance neuve :
+    // toujours l'activation.
+    if(_bp && _bp.preserve) activerPersistElevation();
+    fermerOverlays();
+  };
   setTimeout(() => { if(_profil === 'pc') q('nom').focus(); }, 0);
 
   let enCours = false;
   async function ajouter(){
     if(enCours) return;
     const nom = q('nom').value.toLowerCase(), h1 = q('hex1').value.toLowerCase(), h2 = q('hex2').value.toLowerCase();
+    if(q('preserve').checked && _bp) _bp.preserve = true;
     let c;
     try { c = _bpCaseDuRang(sel.selectedIndex); } catch(e){ c = null; }
     if(!c){
@@ -778,7 +786,7 @@ async function ajouterOverlay(c, nom, hex1, hex2){
   if(hex1.length === 0) hex1 = hex2;
   await chargerGeoBoard(b.name);
   const o = await construireOverlay(b, nom, hex1, hex2);
-  b.overlays.push({nom: o.nom, hex1: o.hex1, hex2: o.hex2});
+  b.overlays.push(Object.assign({nom: o.nom, hex1: o.hex1, hex2: o.hex2}, _bp.preserve ? {persist: true} : {}));
   _bpOverlaysChanges(c);
   await _checkOverlap(c, o);
   return `Added Overlay ${o.nom} (ver ${o.version})`;
@@ -878,7 +886,7 @@ async function _overlap(c, o, dx, dy){
   };
   try {
     const n = await construireOverlay(autre, o.nom, traduire(o.hex1), traduire(o.hex2));
-    autre.overlays.push({nom: n.nom, hex1: n.hex1, hex2: n.hex2});
+    autre.overlays.push(Object.assign({nom: n.nom, hex1: n.hex1, hex2: n.hex2}, _bp.preserve ? {persist: true} : {}));
     _bpOverlaysChanges(v);
   } catch(e){ /* BoardException : ignorée */ }
 }
@@ -1191,4 +1199,31 @@ function _bpTerrain(c, terrain){
   b.ssrModifie = true;
   b._comp = b._compPlein = null;
   _bpApercu(c);
+}
+
+// ═══ PERSISTELEVATION — LOSSettingsAndPrefs, ASLPersistElevation ═══
+// Propriété du module, gardée dans la partie (GlobalProperty
+// « ;PersistElevation;true;Module »). Elle s'active par Done dans Add
+// overlays ; la commande part au log et aux autres joueurs, suivie d'un
+// message au chat. Elle prend effet à la prochaine composition de la carte
+// (Ok du dialogue, ouverture de la partie) : chaque overlay y garde les
+// niveaux du board.
+const CMD_PERSIST = 'command.los.persistelevation|';
+function fixerPersistElevation(oui){
+  const v = oui ? 'true' : 'false';
+  _globales.PersistElevation = v;
+  _globConnu.set(_cleGlob('PersistElevation', 'Module'), v);
+  // Une partie sans la propriété la reçoit, comme VASL l'écrirait.
+  if(_source && !_source.some(x => x.startsWith('GlobalProperty\t;PersistElevation;'))){
+    const iFin = _source.lastIndexOf('end_save');
+    _source.splice(iFin >= 0 ? iFin : _source.length, 0, `GlobalProperty\t;PersistElevation;${v};Module`);
+  }
+}
+function activerPersistElevation(){
+  _avantAction();
+  fixerPersistElevation(true);
+  _logCmd(CMD_PERSIST + 'true');
+  const msg = 'Persist Board Elevation when adding overlays is in effect.';
+  _logCmd('CHAT' + msg);
+  afficherChat(msg);
 }
