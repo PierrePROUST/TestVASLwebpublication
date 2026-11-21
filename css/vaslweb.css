@@ -753,3 +753,77 @@ body.maj .pion.immob{pointer-events:auto}
 #des3d .legende{padding:4px 12px;border-radius:14px;background:rgba(0,0,0,.72);color:#fff;font-size:15px;font-weight:600;
   white-space:nowrap;opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s}
 #des3d .legende.vue{opacity:1;transform:none}
+/* « Pick new boards for this scenario » (js/boards.js) : le BoardPicker de
+   VASSAL — ligne d'état bleue, boutons à gauche, grille de cases. */
+.fenBoards{width:min(96vw,1200px);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.fenBoards .ft{cursor:move;user-select:none;touch-action:none}
+.fenBoards .fc{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
+.fenBoards .bpEtat{min-height:18px;color:#6fa8ff;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fenBoards .bpCorps{display:flex;gap:10px;min-height:0;flex:1}
+.fenBoards .bpOutils{display:flex;flex-direction:column;gap:6px;flex:none}
+.fenBoards .bpOutils button{min-height:30px;white-space:nowrap}
+.fenBoards .bpDefile{flex:1;min-width:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.fenBoards .bpGrille{display:grid;gap:4px;align-items:start;justify-content:start}
+.fenBoards .bpCase{display:flex;flex-direction:column;align-items:center;gap:3px;padding:3px;border:1px solid var(--menu-bord);border-radius:3px}
+.fenBoards .bpChoix{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;max-width:100%}
+.fenBoards .bpChoix .bpRech{width:90px;padding:4px 6px;font-size:13px}
+.fenBoards .bpChoix .bpListe{max-width:230px;padding:4px;font-size:13px}
+.fenBoards label.bpFlip{margin:0;font-size:12px;color:var(--menu-texte)}
+.fenBoards label.bpFlip[hidden]{display:none}
+.fenBoards .bpApercu{display:block;background:#1b1b1b}
+.fenBoards .bpApercu.vide{background:repeating-linear-gradient(45deg,#1e1e1e 0 10px,#252525 10px 20px)}
+/* Au doigt : plein écran, la grille défile dans les deux sens, cibles de 44 px. */
+body:not([data-terminal=pc]) .fenBoards{display:flex;max-height:none;overflow:hidden}
+body:not([data-terminal=pc]) .fenBoards .ft{cursor:default}
+body:not([data-terminal=pc]) .fenBoards .bpCorps{flex-direction:column}
+body:not([data-terminal=pc]) .fenBoards .bpOutils{flex-direction:row;flex-wrap:wrap}
+body:not([data-terminal=pc]) .fenBoards .bpOutils button{flex:1;min-height:44px}
+body:not([data-terminal=pc]) .fenBoards .bpChoix .bpRech,
+body:not([data-terminal=pc]) .fenBoards .bpChoix .bpListe{min-height:44px;font-size:16px}
+body:not([data-terminal=pc]) .fenBoards label.bpFlip{min-height:44px;font-size:15px}
+/* Crop boards : fenêtre modale au-dessus du dialogue des boards. */
+.voile.voileRognage{z-index:9850}
+.fenetre.fenRognage{z-index:9860;width:min(92vw,330px)}
+.fenRognage .ft{cursor:move;user-select:none;touch-action:none}
+.fenRognage .rgLigne{display:flex;flex-direction:row;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;color:var(--menu-texte)}
+.fenRognage .rgLigne > span:first-child{min-width:64px}
+.fenRognage .rgLigne input{width:56px}
+.fenRognage .rgLigne select{flex:1}
+body:not([data-terminal=pc]) .fenRognage .ft{cursor:default}
+body:not([data-terminal=pc]) .fenRognage .rgLigne input,
+body:not([data-terminal=pc]) .fenRognage .rgLigne select{min-height:44px;font-size:16px}
+/* Add overlays : Overlay, Board, Hex 1, Hex 2 côte à côte, état au-dessus. */
+.fenetre.fenOverlays{width:min(94vw,440px)}
+.fenOverlays .ovEtat{min-height:18px;margin-bottom:8px;text-align:center;color:var(--menu-texte)}
+.fenOverlays .ovChamps{display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:6px}
+.fenOverlays .ovChamps label{margin-bottom:8px;min-width:0}
+.fenOverlays .ovChamps input,.fenOverlays .ovChamps select{width:100%;min-width:0;box-sizing:border-box}
+body:not([data-terminal=pc]) .fenOverlays .ovChamps{grid-template-columns:1fr 1fr}
+body:not([data-terminal=pc]) .fenOverlays .ovChamps input,
+body:not([data-terminal=pc]) .fenOverlays .ovChamps select{min-height:44px;font-size:16px}
+/* Terrain SSR : options de base en haut, état, puis boutons, catégories
+   et réglages de la catégorie choisie. */
+.fenetre.fenTerrain{width:min(96vw,820px);max-height:92vh}
+.fenTerrain .teBasics{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.fenTerrain .teBasic{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end}
+.fenTerrain .teOption{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--menu-doux)}
+.fenTerrain .teOption[hidden]{display:none}
+.fenTerrain .teOption label.coche{margin:0;color:var(--menu-texte);font-size:13px}
+.fenTerrain .teTransfo{flex-direction:row;align-items:center;gap:6px;color:var(--menu-texte);font-size:13px}
+.fenTerrain .teEtat{width:100%;box-sizing:border-box;margin-bottom:8px}
+.fenTerrain .teCorps{display:flex;gap:10px;align-items:flex-start}
+.fenTerrain .teBoutons{display:flex;flex-direction:column;gap:6px;flex:none;width:120px}
+.fenTerrain .teBoutons button{min-height:30px}
+.fenTerrain label.teBoard{margin:0}
+.fenTerrain .teListe{flex:none;width:190px;min-height:120px}
+.fenTerrain .teCartes{flex:1;min-width:0}
+.fenTerrain .teCategorie{display:flex;flex-direction:column;gap:8px}
+.fenTerrain .teCategorie[hidden]{display:none}
+.fenTerrain .teCategorie select{max-width:100%}
+body:not([data-terminal=pc]) .fenTerrain{overflow:auto}
+body:not([data-terminal=pc]) .fenTerrain .teCorps{flex-direction:column;align-items:stretch}
+body:not([data-terminal=pc]) .fenTerrain .teBoutons{width:auto;flex-direction:row;flex-wrap:wrap}
+body:not([data-terminal=pc]) .fenTerrain .teBoutons > *{flex:1}
+body:not([data-terminal=pc]) .fenTerrain .teBoutons button{min-height:44px}
+body:not([data-terminal=pc]) .fenTerrain .teListe{width:100%;min-height:44px}
+body:not([data-terminal=pc]) .fenTerrain select{min-height:44px;font-size:16px}

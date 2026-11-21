@@ -343,11 +343,29 @@ async function chargerPartie(texte, label, annexes){
   document.title = 'VASLweb 1.01 — ' + label;
   chatLog(`🗺️ ${label} — boards : `
     + boards.map(b => b.name + (b.reversed ? ' (retourné)' : '')).join(', '));
+  // PersistElevation sert à composer les boards : lu ici, avant
+  // lireGlobales (importerPions), qui le relira.
+  const pe = /(?:^|\x1b)GlobalProperty\t;PersistElevation;([^;\x1b]*);/.exec(texte);
+  _globales.PersistElevation = pe ? pe[1] : '';
   await _renderBoards(boards);
+  avertirVersionsBoards(boards);
   importerPions(texte, label, annexes);
   poserTables();
   _partieModifiee = false;
   return true;
+}
+
+// ASLBoardPicker.buildBoard : la version écrite (VER) comparée à celle du
+// board téléchargé ; un écart est signalé, le board est quand même posé.
+function avertirVersionsBoards(boards){
+  for(const b of boards){
+    const g = _geoBoards.get(b.name), etat = b.etat || '';
+    const i = etat.indexOf('VER');
+    if(!g || g.defaut || i < 0) continue;
+    const voulue = etat.substring(i + 4).split('\t').find(t => t);
+    if(voulue !== undefined && voulue !== g.version)
+      chatLog(`This game was saved with board ${g.nomBoard} v${voulue}. You are using v${g.version}`);
+  }
 }
 
 const EXT_ACCEPTEES = ['.vsav', '.vlog'];

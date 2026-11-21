@@ -3106,7 +3106,16 @@ class LosOverlay {
       else if(lisible(a, -a, a - 1, -a)) p = [a - 1, -a];
       else if(lisible(-a, a, -(a - 1), a)) p = [-(a - 1), a];
       else if(lisible(-a, -a, -(a - 1), -a)) p = [-(a - 1), -a];
-      if(p){ const q = this.argb(this.cx + p[0], this.cy + p[1]); if(q.a) c = q.rgb | 0x1000000; }
+      if(p){
+        const q = this.argb(this.cx + p[0], this.cy + p[1]);
+        if(q.a) c = q.rgb | 0x1000000;
+        // Preserve Board Elevation : sous un point transparent, la couleur
+        // découverte du board (getOGLevel ; transparent → blanc).
+        else if(this.ov.persist){ const v = this.ogBoard(this.cx + p[0], this.cy + p[1]); c = (v === -1 ? _BLANC : v) | 0x1000000; }
+      } else if(this.ov.persist && this.m.onMap(nx, ny) && this.surOverlay(this.cx - 1, this.cy)){
+        const v = this.couleurBoard(this.cx, this.cy);
+        if(v != null) c = v | 0x1000000;
+      }
       if(c !== 0) coul = c & 0xFFFFFF;
       if(++a > 6) break;
     }
@@ -3141,6 +3150,22 @@ class LosOverlay {
       else if(coul !== _NOIR) e = this.niveauCouleur(coul);
     }
     return e;
+  }
+
+  // Image du board sous un point de l'overlay (repère du board non
+  // recadré). VASL lit l'image du board au point de la carte ou de
+  // l'overlay, ce qui ne vaut que pour un board posé en haut à gauche ;
+  // ici, le point du board sous l'overlay.
+  couleurBoard(cx, cy){
+    const bd = _pixelsBoards.get(this.b.name), x = this.ov.x + cx, y = this.ov.y + cy;
+    if(!bd || x < 0 || y < 0 || x >= bd.width || y >= bd.height) return null;
+    const k = (y * bd.width + x) * 4;
+    return bd.data[k] << 16 | bd.data[k+1] << 8 | bd.data[k+2];
+  }
+  ogBoard(cx, cy){
+    const bd = _pixelsBoards.get(this.b.name), meta = _metaPersistPret;
+    if(!bd || !meta) return -1;
+    return ogLevel(meta, bd, this.ov.x + cx, this.ov.y + cy, this.ov.nom.includes('og'));
   }
 
   // pixelOnTransparentOverlayBorder
@@ -3179,9 +3204,10 @@ class LosOverlay {
     return null;
   }
 
-  // updateTerrainElevationGridsforOverlays (sans « Preserve Levels »)
+  // updateTerrainElevationGridsforOverlays ; avec Preserve Board
+  // Elevation (ov.persist), le niveau reste celui du board.
   passeGrilles(){
-    const m = this.m, ov = this.ov;
+    const m = this.m, ov = this.ov, garde = !!ov.persist;
     for(this.cx = 0; this.cx < ov.w; this.cx++)
       for(this.cy = 0; this.cy < ov.h; this.cy++){
         const p = this.versCarte(this.cx, this.cy);
@@ -3192,16 +3218,23 @@ class LosOverlay {
         if(q.a){ rgb = q.rgb; terr = this.terrainDeCouleur(rgb); }
         else {
           terr = this.terrainPixelTransparent();
-          if(terr == null) continue;
+          if(terr == null){
+            if(!garde) continue;
+            // Le terrain du board sous le point (getTerrainForColor).
+            const c = this.couleurBoard(this.cx, this.cy);
+            let k = c == null ? -1 : this.terrainCouleur(c);
+            if(k === -1) k = 0;
+            terr = m.getTerrainParCode(k) || m.getTerrain('Open Ground');
+          }
         }
         if(this.bamboo && terr.getName() === 'Brush') terr = m.getTerrain('Bamboo') || terr;
         if(terr.isBuildingTerrain() && !terr.isHexsideTerrain()){
           const t = m.getTerrain(_batimentOverlay(ov.nom, terr)) || terr;
           m.setGridTerrainCode(t.type, p.x, p.y);
         } else m.setGridTerrainCode(terr.type, p.x, p.y);
-        let e = this.niveauDeCouleur(rgb);
+        let e = garde ? -99 : this.niveauDeCouleur(rgb);
         if(e === -99) e = m.getGridElevation(p.x, p.y);
-        if(terr.isDepression()) e = -1;
+        if(terr.isDepression()) e = garde ? m.getGridElevation(p.x, p.y) - 1 : -1;
         m.setGridElevation(e, p.x, p.y);
       }
   }
@@ -3286,7 +3319,7 @@ class LosOverlay {
     for(let i = r.x; i < r.x + r.width; i++)
       for(let j = r.y; j < r.y + r.height; j++){
         if(!m.onMap(i, j) || !hex.contains(i, j)) continue;
-        if(m.getGridTerrain(i, j).isDepression() && this.depressionPleine(i, j)) return -1;
+        if(m.getGridTerrain(i, j).isDepression() && this.depressionPleine(i, j)) return this.ov.persist ? m.getGridElevation(i, j) : -1;
         max = Math.max(max, m.getGridElevation(i, j));
       }
     return max;

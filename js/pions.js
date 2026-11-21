@@ -911,6 +911,8 @@ function _inverse(c){
   if(_CMD_LIEN.test(c)) return [c.startsWith('UN') ? c.substring(2) : 'UN' + c];
   // CreateModule ↔ RemoveModule, UpdateModule vers l'état d'avant.
   if(_cleOBA(c).startsWith('OBA/')) return _inverseOBA(c);
+  // Activate ↔ DeactivatePersistElevationCommand (myUndoCommand).
+  if(c.startsWith(CMD_PERSIST)) return [CMD_PERSIST + (c.substring(CMD_PERSIST.length).split('|')[0].toLowerCase() === 'true' ? 'false' : 'true')];
   // ChangePropertyCommand : la valeur d'avant.
   if(c.startsWith('MutableProperty\t')){
     const g = _lireGlob(c);
@@ -1103,6 +1105,10 @@ function rejouerLog(segs){
       if(_obaAppliquer(s)) n++;
     } else if(s.startsWith('MutableProperty\t') || s.startsWith('GlobalProperty\t')){
       if(_appliquerGlob(s)) n++;
+    } else if(s.startsWith(CMD_PERSIST)){
+      // LOSSettingsAndPrefs.decode : Activate / DeactivatePersistElevationCommand.
+      fixerPersistElevation(s.substring(CMD_PERSIST.length).split('|')[0].toLowerCase() === 'true');
+      n++;
     } else if(s.startsWith('+/')){
       if(/^\+\/[^/]+\/stack\//.test(s)){
         _pilesVassal.set(s.split('/')[1], _idsPile(s.substring(s.indexOf('/stack/') + 7)));
