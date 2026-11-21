@@ -31,7 +31,10 @@ function _parseBoardSegment(text){
       col, row, name, reversed, crop,
       zoom: zm ? parseFloat(zm[1]) : 1,
       ssrList: m ? m[1].split('\t').filter(s => s && s !== 'true' && s !== 'false' && s !== 'FH') : [],
-      overlays: _parseOverlays(part)
+      overlays: _parseOverlays(part),
+      // État tel qu'écrit (ASLBoard.getState) : « Pick new boards » le
+      // réécrit tel quel, seules la place et le retournement changeant.
+      etat: part.replace(/\\+$/, '')
     });
   }
   return out;
@@ -101,8 +104,14 @@ async function chargerGeoBoard(nom){
         if(regle && texte) for(const r of regle.split(',')) if(r.trim()) libelles[r.trim()] = texte;
       }
     }
+    // Nom de l'image (ASLBoard.getState : imageFile sans « bd » ni « .gif »),
+    // nom du board (getName) et version (VER), comme les lit BoardArchive.
+    const nomImage = /^bd(.+?)\.gif$/i.exec(att.boardImageFileName || '');
     g = {
       libelles,
+      nomImage: nomImage ? nomImage[1] : nom,
+      nomBoard: att.name || nom,
+      version: att.version ?? att['data.version'] ?? '0.0',
       cols: parseInt(att.width, 10)  || HEX_COLS,
       rows: parseInt(att.height, 10) || HEX_ROWS,
       hw: nb(att.hexWidth  ?? att['data.dx'], 56.25),
@@ -276,6 +285,31 @@ function _layoutBoards(boards){
     totalH = Math.max(totalH, b.py + b.dispH);
   }
   return {totalW, totalH};
+}
+
+// ── Repère d'un board (ASLBoard.localCoordinates / globalCoordinates).
+// « Affiché » : pixels depuis le coin du board sur la carte (dispW ×
+// dispH : recadré, grossi, retourné) ; « local » : pixels de l'image du
+// board non recadrée, au format natif.
+function localCoordinates(b, p){
+  let x = p.x, y = p.y;
+  if(b.reversed){ x = b.dispW - x; y = b.dispH - y; }
+  const z = b.zoom || 1;
+  if(z !== 1){ x = Math.round(x / z); y = Math.round(y / z); }
+  return {x: x + (b.crop ? b.crop.x || 0 : 0), y: y + (b.crop ? b.crop.y || 0 : 0)};
+}
+function globalCoordinates(b, p){
+  let x = p.x - (b.crop ? b.crop.x || 0 : 0), y = p.y - (b.crop ? b.crop.y || 0 : 0);
+  const z = b.zoom || 1;
+  if(z !== 1){ x = Math.round(x * z); y = Math.round(y * z); }
+  if(b.reversed){ x = b.dispW - x; y = b.dispH - y; }
+  return {x, y};
+}
+// Map.findBoard : le premier board dont l'emprise contient le point
+// (pixels de la carte, marge comprise), ou null.
+function boardSous(boards, x, y){
+  const X = x - BOARD_MARGIN, Y = y - BOARD_MARGIN;
+  return (boards || []).find(b => X >= b.px && X < b.px + b.dispW && Y >= b.py && Y < b.py + b.dispH) || null;
 }
 
 // ── Beaucoup de GPU Android plafonnent un canvas à 4096 px de côté.

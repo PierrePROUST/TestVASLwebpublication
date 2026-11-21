@@ -128,6 +128,9 @@ const ACTIONS = {
              faire: leverDeplaces},
   all:      {lib: 'Remove all — retirer tous les pions d\'un type…', court: 'ALL', img: 'QC/Remove.png',
              faire: ancre => ouvrirMassRemover(ancre)},
+  // BoardSwapper de VASL (menu de la carte) : changer les boards de la partie.
+  boards:   {lib: 'Pick new boards for this scenario', court: 'Boards', img: 'newBoards.gif',
+             faire: () => ouvrirChoixBoards(), actif: () => !!_source},
   brises:   {lib: 'Entourer les unités brisées et les armes MALF', court: 'Broken', ico: '⭕', pion: ICONE_BRISES,
              faire: () => basculerRepere('brises'), allume: () => _reperes.brises},
   sniper:   {lib: 'Entourer le sniper', court: 'Sniper', ico: '🎯', pion: ICONE_SNIPER,
@@ -451,7 +454,7 @@ const DISPOSITIONS = {
     // des piles (LOS détaillée : dans la roue et au clic droit sur LOS).
     barre: ['ouvrir', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'zoom100',
             'rotGauche', 'rotDroite', 'rot180', 'rot0',
-            '|', 'relecture', 'los', 'losMuet', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'sanPieges',
+            '|', 'relecture', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'sanPieges',
             '|', 'pions', 'journal', '|', 'reseau', 'utilisateur', '|', 'config', 'raccourcis'],
     // La barre QC de VASL (Quick Counters) : marqueurs à tirer sur la carte.
     barreQC: true,
@@ -680,7 +683,7 @@ function placerColonne(c){
 // verrou des pions, effectif des piles, aperçu du chat, raccourcis. La
 // sélection des overlays reste : sans elle, un overlay posé ne pourrait
 // plus être ni déplacé ni retiré au doigt.
-const RAIL_TACTILE = ['ouvrir', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'brises', 'sniper', 'masquer', 'tables',
+const RAIL_TACTILE = ['ouvrir', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables',
   'oba', 'bin', 'couche_overlay', 'rotDroite', 'rot180', 'sanPieges'];
 // Réglages de la roue ⚙ en affichage tactile : préférences (utilisateur,
 // LOS, décompte), identification, partie à distance, dés 3D, côté de la
