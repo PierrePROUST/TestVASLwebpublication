@@ -10,7 +10,7 @@
 // point de l'image (recordPiecePositions / restorePiecePositions).
 // Crop boards : le Cropper d'ASLBoardPicker et ASLBoard.crop. Add overlays :
 // l'Overlayer, ASLBoardSlot.addOverlay / checkOverlap et Overlay. Terrain
-// SSR viendra ensuite.
+// SSR : le TerrainEditor (« Terrain Transformations »).
 // ═══════════════════════════════════════════════════════════════
 const VASL_BOARD_VERSIONS_URL =         // boardVersionURL du buildFile
   'https://raw.githubusercontent.com/vasl-developers/vasl/develop/boards/v5boardVersions.xml';
@@ -116,12 +116,34 @@ function etatBoard(b){
       const suite = reste.join('\t').replace(/\tFH\t(true|false)/g, '');
       etat = t.slice(0, 3).join('\t') + '\t' + _champsCrop(b) + suite + _champFH(b);
     }
-    return b.ovrModifie ? _remplacerOVR(etat, b.overlays) : etat;
+    if(b.ovrModifie) etat = _remplacerOVR(etat, b.overlays);
+    return b.ssrModifie ? _remplacerSSR(etat, b.terrain) : etat;
   }
   const g = geoBoard(b);
   return `${b.col}\t${b.row}\t${r}${g.nomImage || b.name}\t${_champsCrop(b)}VER\t${g.version || '0.0'}\t`
-    + (b.overlays || []).map(o => `OVR\t${o.nom}\t${o.hex1}\t${o.hex2}\t`).join('') + _champFH(b);
+    + (b.overlays || []).map(o => `OVR\t${o.nom}\t${o.hex1}\t${o.hex2}\t`).join('')
+    + (b.terrain ? 'SSR\t' + b.terrain : '') + _champFH(b);
 }
+
+// Règles SSR écrites (terrainChanges) : ce qui suit « SSR », jusqu'au ZOOM
+// ou au FH final.
+function _terrainEcrit(etat){
+  const i = (etat || '').indexOf('\tSSR\t');
+  if(i < 0) return '';
+  return etat.substring(i + 5).replace(/(\tZOOM\t[^\t]*)?(\tFH\t(true|false))?$/, '');
+}
+// Règles SSR changées dans le dialogue : « SSR \t règles » remplacé (ou
+// retiré), ZOOM et FH gardés en fin d'état, comme dans getState.
+function _remplacerSSR(etat, terrain){
+  const fin = /(\tZOOM\t[^\t]*)?(\tFH\t(true|false))?$/.exec(etat)[0];
+  let tete = etat.substring(0, etat.length - fin.length);
+  const i = tete.indexOf('\tSSR\t');
+  if(i >= 0) tete = tete.substring(0, i + 1);
+  else if(!tete.endsWith('\t')) tete += '\t';
+  return tete + (terrain ? 'SSR\t' + terrain : '') + fin;
+}
+// SSRFilter : les règles sont les mots des règles écrites.
+const _reglesDuTerrain = t => [...new Set((t || '').split(/\s+/).filter(x => x && x !== 'true' && x !== 'false' && x !== 'FH'))];
 
 // Overlays changés dans le dialogue : chaque « OVR nom hex1 hex2 » est
 // retiré, puis la liste entière est écrite à sa place dans getState —
@@ -155,13 +177,15 @@ function _copieBoard(b){
           zoom: b.zoom || 1, ssrList: (b.ssrList || []).slice(),
           overlays: (b.overlays || []).map(o => Object.assign({}, o)),
           etat: b.etat || null, nomEcrit: b.etat ? (b.nomEcrit || _nomEcrit(b)) : null,
-          fh: !!b.fh, cropModifie: !!b.cropModifie, ovrModifie: !!b.ovrModifie,
+          fh: !!b.fh, cropModifie: !!b.cropModifie, ovrModifie: !!b.ovrModifie, ssrModifie: !!b.ssrModifie,
+          terrain: b.terrain !== undefined ? b.terrain : _terrainEcrit(b.etat),
           // Image composée de la carte (recadrée), et le recadrage qu'elle suit.
           _comp: b._comp || null, _compCrop: b._comp ? (b.hasOwnProperty('_compCrop') ? b._compCrop : b.crop) : null,
           _compPlein: b._compPlein || null};
 }
 const _boardNeuf = nom => ({name: nom, reversed: false, crop: null, zoom: 1, ssrList: [], overlays: [],
                             etat: null, nomEcrit: null, fh: false, cropModifie: false, ovrModifie: false,
+                            ssrModifie: false, terrain: '',
                             _comp: null, _compCrop: null, _compPlein: null});
 const _memeCrop = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
 
@@ -191,6 +215,7 @@ function ouvrirChoixBoards(){
           <button type="button" data-bp="vider">Clear</button>
           <button type="button" data-bp="overlays">Add overlays</button>
           <button type="button" data-bp="rogner">Crop boards</button>
+          <button type="button" data-bp="terrain">Terrain SSR</button>
         </div>
         <div class="bpDefile"><div class="bpGrille"></div></div>
       </div>
@@ -212,6 +237,7 @@ function ouvrirChoixBoards(){
   q('vider').onclick = () => { _bpReset(); _bpRendre(); };
   q('rogner').onclick = () => ouvrirRognage();
   q('overlays').onclick = () => ouvrirOverlays();
+  q('terrain').onclick = () => ouvrirTerrain();
   q('annuler').onclick = () => fermerChoixBoards();
   q('ok').onclick = () => validerChoixBoards();
   // getControls : reset(), puis setBoards(map.getBoards()).
@@ -229,6 +255,7 @@ function fermerChoixBoards(){
   if(!_bp) return;
   fermerRognage();
   fermerOverlays();
+  fermerTerrain();
   for(const c of _bp.cases) _bpOublierCase(c);
   clearInterval(_bp.etatMin);
   _bp.w.remove(); _bp.voile.remove();
@@ -270,7 +297,7 @@ function _bpNouvelleCase(){
       <select class="bpListe" aria-label="Board"></select>
       <label class="coche bpFlip" hidden><input type="checkbox"><span>flip</span></label>
     </div><canvas class="bpApercu"></canvas>`;
-  const c = {el, board: null, minuteur: null, attente: null, gen: 0,
+  const c = {el, board: null, minuteur: null, attente: null, gen: 0, terrain: '',
              rech: el.querySelector('.bpRech'), sel: el.querySelector('.bpListe'),
              flip: el.querySelector('.bpFlip'), cv: el.querySelector('.bpApercu')};
   c.rech.addEventListener('input', () => _bpFiltrer(c));
@@ -382,6 +409,9 @@ function _bpCharger(c){
 }
 function _bpPoser(c, b){
   c.board = b;
+  // ASLBoardSlot.setBoard : la case reprend les règles SSR du board s'il
+  // en a ; sinon elle garde les siennes (une case vide n'en a pas).
+  if(b && b.terrain) c.terrain = b.terrain;
   c.flip.hidden = !b;
   c.flip.querySelector('input').checked = !!(b && b.reversed);
   _bpApercu(c);
@@ -546,7 +576,7 @@ function restaurerPions(boards, releve){
 let _rg = null;
 
 function ouvrirRognage(){
-  if(!_bp || _rg || _ov) return;
+  if(!_bp || _rg || _ov || _te) return;
   const noms = _bpBoardsControles().map(b => b.name);
   const voile = document.createElement('div');
   voile.className = 'voile voileRognage';
@@ -660,7 +690,7 @@ function cropBoard(b, row1, row2, coord1, coord2, nearestFullRow){
 let _ov = null;
 
 function ouvrirOverlays(){
-  if(!_bp || _ov || _rg) return;
+  if(!_bp || _ov || _rg || _te) return;
   const noms = _bpBoardsControles().map(b => b.name);
   const voile = document.createElement('div');
   voile.className = 'voile voileRognage';
@@ -851,4 +881,314 @@ async function _overlap(c, o, dx, dy){
     autre.overlays.push({nom: n.nom, hex1: n.hex1, hex2: n.hex2});
     _bpOverlaysChanges(v);
   } catch(e){ /* BoardException : ignorée */ }
+}
+
+// ═══ TERRAIN SSR — ASLBoardPicker.TerrainEditor ═══
+// « Terrain Transformations » : en haut les options de base (Basic : mois,
+// vergers, céréales…), puis la ligne d'état ; à gauche Board (vide = tous
+// les boards), Apply, Reset, Done ; au milieu la liste des catégories
+// (Option), à droite les réglages de la catégorie choisie. Les options
+// viennent de boardData/SSRControls du module, puis des catégories
+// « Transformations » (quatre lignes « All … is … ») et de celles du
+// fichier SSRControls de chaque board. Une option marquée <Source/>
+// coche ou décoche, par ses <Target>, les entrées qui en dépendent.
+// Apply ajoute les règles des catégories à la case (ASLBoardSlot.terrain)
+// et pose sur le board « règles de base + règles de la case », puis remet
+// les catégories à leur défaut ; Reset efface les règles de toutes les
+// cases ; Done remet toutes les options à leur défaut et ferme.
+let _te = null;
+let _ssrModule = null;        // Promise<texte> de boardData/SSRControls
+function texteSSRControls(){
+  if(!_ssrModule){
+    _ssrModule = fetch(VASL_BOARDDATA_URL + 'SSRControls').then(r => {
+      if(!r.ok) throw new Error('SSRControls introuvable (HTTP ' + r.status + ')');
+      return r.text();
+    });
+    _ssrModule.catch(() => { _ssrModule = null; });
+  }
+  return _ssrModule;
+}
+
+// Une option de terrain (TerrainOption) : Menu, ScrollList ou Checkbox.
+function _optionTerrain(ed, e){
+  const o = {nom: e.getAttribute('name') || '', type: e.tagName, regles: new Map(), textes: new Map(),
+             defauts: [], entrees: [], el: document.createElement('div')};
+  o.el.className = 'teOption';
+  if(e.getElementsByTagName('Source').length) ed.sources.add(o);
+  let ctrl;
+  if(o.type === 'Menu') ctrl = document.createElement('select');
+  else if(o.type === 'ScrollList'){ ctrl = document.createElement('select'); ctrl.multiple = true; }
+  else if(o.type === 'Checkbox'){ ctrl = document.createElement('input'); ctrl.type = 'checkbox'; }
+  else throw new Error('Unrecognized SSR component type ' + o.type);
+  o.ctrl = ctrl;
+  let texteCase = '';
+  for(const en of e.getElementsByTagName('entry')){
+    const n = en.getAttribute('name') || '';
+    o.entrees.push(n);
+    o.regles.set(n, (en.getAttribute('rule') || '').replace(/,/g, '\t'));
+    o.textes.set(n, en.getAttribute('text') || '');
+    if(o.type === 'Checkbox') texteCase = n;
+    else {
+      const op = document.createElement('option');
+      op.value = op.textContent = n;
+      ctrl.appendChild(op);
+      if(o.type === 'Menu' && en.getAttribute('default')) o.defauts.push(n);
+    }
+    for(const t of en.getElementsByTagName('Target')){
+      const act = [...t.getElementsByTagName('activate')].map(a => a.getAttribute('sourceProperty'));
+      const des = [...t.getElementsByTagName('deactivate')].map(a => a.getAttribute('sourceProperty'));
+      if(act.length || des.length){
+        const src = t.getAttribute('sourceName') || '';
+        if(!ed.cibles.has(src)) ed.cibles.set(src, []);
+        ed.cibles.get(src).push({o, prop: n, act: act.length ? act : null, des: des.length ? des : null});
+      }
+    }
+  }
+  if(o.type === 'ScrollList') ctrl.size = Math.max(2, Math.min(6, o.entrees.length));
+  o.texteCase = texteCase;
+  // Le nom, sauf pour une case à cocher qui le porte déjà.
+  if(o.type === 'Checkbox'){
+    const l = document.createElement('label');
+    l.className = 'coche';
+    const sp = document.createElement('span');
+    sp.textContent = texteCase;
+    l.append(ctrl, sp);
+    if(o.nom !== texteCase){ const t = document.createElement('span'); t.className = 'teNom'; t.textContent = o.nom; o.el.appendChild(t); }
+    o.el.appendChild(l);
+  } else {
+    const t = document.createElement('span');
+    t.className = 'teNom';
+    t.textContent = o.nom;
+    o.el.append(t, ctrl);
+  }
+  o.el.hidden = e.getElementsByTagName('invisible').length > 0;
+  o.actives = () => {
+    if(o.type === 'Checkbox') return [ctrl.checked ? texteCase : ''];
+    return [...ctrl.options].filter(x => x.selected).map(x => x.value);
+  };
+  o.activer = (val, oui) => {
+    if(o.type === 'Checkbox') ctrl.checked = oui && texteCase === val;
+    else if(o.type === 'Menu'){
+      if(val == null || !oui) ctrl.value = o.defauts.length ? o.defauts[0] : (o.entrees[0] ?? '');
+      else if(o.entrees.includes(val)) ctrl.value = val;
+    } else {
+      const op = [...ctrl.options].find(x => x.value === val);
+      if(op) op.selected = oui;
+    }
+    _teChange(ed, o);
+  };
+  o.reset = () => {
+    for(const v of o.actives()) o.activer(v, false);
+    for(const v of o.defauts) o.activer(v, true);
+  };
+  o.regle = () => o.actives().map(v => o.regles.get(v)).filter(x => x).map(x => x + '\t').join('');
+  o.texte = () => o.actives().map(v => o.textes.get(v)).filter(x => x).map(x => x + ', ').join('');
+  ctrl.addEventListener('change', () => _teChange(ed, o));
+  return o;
+}
+
+// TransformOption : « All [de] is [vers] » → « DeToVers ».
+const TE_DE = ['-', 'Woods', 'Brush', 'Grain', 'Marsh', 'Marsh -1', 'Marsh 0', 'Level -1', 'Level 1', 'Level 2', 'Level 3', 'Level 4'];
+const TE_VERS = ['-', 'Woods', 'Brush', 'Grain', 'Marsh', 'Level -1', 'Level 0', 'Level 1', 'Water'];
+function _optionTransformation(){
+  const o = {nom: '', type: 'Transform', defauts: [], el: document.createElement('div')};
+  o.el.className = 'teOption teTransfo';
+  const liste = l => { const s = document.createElement('select'); for(const v of l){ const op = document.createElement('option'); op.value = op.textContent = v; s.appendChild(op); } return s; };
+  const de = liste(TE_DE), vers = liste(TE_VERS);
+  const mot = t => { const sp = document.createElement('span'); sp.textContent = t; return sp; };
+  o.el.append(mot('All'), de, mot('is'), vers);
+  const nom = v => v.split(/\s+/).join('').replace(/-/g, '_');
+  o.regle = () => de.value !== '-' && vers.value !== '-' ? nom(de.value) + 'To' + nom(vers.value) : '';
+  o.texte = () => de.value !== '-' && vers.value !== '-' ? 'all ' + de.value.toLowerCase() + ' is ' + vers.value.toLowerCase() : '';
+  o.reset = () => { de.selectedIndex = 0; vers.selectedIndex = 0; };
+  o.actives = () => [];
+  return o;
+}
+
+// TerrainMediator : une source change → ses cibles s'activent (une de
+// leurs propriétés « activate » est choisie) ou se désactivent.
+function _teChange(ed, o){
+  if(!ed.sources.has(o) || ed.profondeur > 20) return;
+  ed.profondeur++;
+  try {
+    const actives = o.actives();
+    for(const c of ed.cibles.get(o.nom) || []){
+      if(c.act && c.act.some(v => actives.includes(v))) c.o.activer(c.prop, true);
+      else if(c.des && c.des.some(v => actives.includes(v))) c.o.activer(c.prop, false);
+    }
+  } finally { ed.profondeur--; }
+}
+
+// SSRControlsFile : les Basic, puis chaque Option (catégorie) et ses
+// réglages. Une catégorie déjà présente n'est pas reprise à l'écran (ses
+// réglages comptent quand même, comme dans VASL).
+function _teLireOptions(ed, texte){
+  let doc;
+  try { doc = new DOMParser().parseFromString(texte, 'application/xml'); } catch(e){ return; }
+  if(!doc || doc.getElementsByTagName('parsererror').length) return;
+  const basic = doc.getElementsByTagName('Basic')[0];
+  if(basic){
+    const panneau = document.createElement('div');
+    panneau.className = 'teBasic';
+    for(const e of basic.children){
+      try { const o = _optionTerrain(ed, e); panneau.appendChild(o.el); ed.base.push(o); } catch(err){}
+    }
+    ed.basics.unshift(panneau);
+  }
+  for(const e of doc.getElementsByTagName('Option')){
+    const boite = document.createElement('div');
+    boite.className = 'teCategorie';
+    for(const x of e.children){
+      try { const o = _optionTerrain(ed, x); boite.appendChild(o.el); ed.groupe.push(o); } catch(err){}
+    }
+    _teCategorie(ed, e.getAttribute('name') || '', boite);
+  }
+}
+function _teCategorie(ed, nom, boite){
+  if(ed.categories.has(nom)) return;
+  ed.categories.set(nom, boite);
+}
+
+async function ouvrirTerrain(){
+  if(!_bp || _te || _rg || _ov) return;
+  const bp = _bp;
+  const boards = _bpBoardsControles();
+  const ed = {sources: new Set(), cibles: new Map(), base: [], basics: [], groupe: [], categories: new Map(), profondeur: 0};
+  _bpEtat('Working ...');
+  let texte = '';
+  try { texte = await texteSSRControls(); } catch(e){ _bpEtat('⚠️ ' + e.message); }
+  if(_bp !== bp || _te) return;
+  _teLireOptions(ed, texte);
+  // setup : les quatre transformations, puis les options de chaque board.
+  const transfo = document.createElement('div');
+  transfo.className = 'teCategorie';
+  for(let i = 0; i < 4; i++){ const o = _optionTransformation(); transfo.appendChild(o.el); ed.groupe.push(o); }
+  _teCategorie(ed, 'Transformations', transfo);
+  let versions = '', n = 0;
+  for(const b of boards){
+    const g = await chargerGeoBoard(b.name);
+    if(g.defaut) continue;
+    try {
+      const files = await _archive(b.name);
+      const ctl = _fichier(files, 'SSRControls');
+      if(ctl) _teLireOptions(ed, new TextDecoder().decode(ctl));
+    } catch(e){}
+    n++;
+    versions += `${g.nomBoard} (ver ${g.version}) `;
+  }
+  if(_bp !== bp || _te) return;
+  _bpEtat('');
+  const voile = document.createElement('div');
+  voile.className = 'voile voileRognage';
+  const w = document.createElement('div');
+  w.className = 'fenetre fenRognage fenTerrain';
+  w.setAttribute('role', 'dialog');
+  w.setAttribute('aria-modal', 'true');
+  w.setAttribute('aria-label', 'Terrain Transformations');
+  w.innerHTML = `<div class="ft">Terrain Transformations</div><div class="fc">
+      <div class="teBasics"></div>
+      <input class="teEtat" readonly aria-label="Status" value="Leave board number blank to apply to all boards:  ">
+      <div class="teCorps">
+        <div class="teBoutons">
+          <label class="teBoard">Board <select data-te="board"></select></label>
+          <button type="button" class="prim" data-te="apply">Apply</button>
+          <button type="button" data-te="reset">Reset</button>
+          <button type="button" data-te="done">Done</button>
+        </div>
+        <select class="teListe" size="6" aria-label="Categories"></select>
+        <div class="teCartes"></div>
+      </div>
+    </div>`;
+  const q = s => w.querySelector(`[data-te="${s}"]`);
+  w.querySelector('.teBasics').append(...ed.basics);
+  // Board : une ligne vide (tous les boards), puis les boards de la grille.
+  const sel = q('board');
+  ['', ...boards.map(b => b.name)].forEach((nom, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = nom; sel.appendChild(o); });
+  const liste = w.querySelector('.teListe'), cartes = w.querySelector('.teCartes');
+  for(const [nom, boite] of ed.categories){
+    const o = document.createElement('option');
+    o.value = o.textContent = nom;
+    liste.appendChild(o);
+    boite.hidden = true;
+    cartes.appendChild(boite);
+  }
+  // CardLayout : la première carte est montrée tant que rien n'est choisi.
+  const montrer = nom => { for(const [k, b] of ed.categories) b.hidden = k !== nom; };
+  montrer([...ed.categories.keys()][0]);
+  liste.addEventListener('change', () => montrer(liste.value));
+  document.body.append(voile, w);
+  _te = {w, voile, ed};
+  const etat = t => { w.querySelector('.teEtat').value = t; };
+  // Le terrain est remis à ses défauts, puis la ligne d'état dit les boards.
+  _teReset(ed, true);
+  etat(n === 0 ? 'No boards loaded' : n === 1 ? 'Loaded board ' + versions
+     : 'Loaded boards ' + versions + ' (leave board number blank to apply to all)');
+  w.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if(e.key === 'Escape'){ e.preventDefault(); terminer(); }
+  });
+  w.addEventListener('pointerdown', e => e.stopPropagation());
+  voile.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+  _deplacableParTitre(w);
+  const terminer = () => { _teReset(ed, true); fermerTerrain(); };
+  q('done').onclick = terminer;
+  q('apply').onclick = () => {
+    etat('Working ...');
+    const regles = _teReglesOptions(ed), base = ed.base.map(o => o.regle()).join('');
+    const cases = [];
+    if(sel.selectedIndex <= 0){
+      for(let t = 0; t < sel.options.length - 1; t++){
+        let c = null;
+        try { c = _bpCaseDuRang(t); } catch(e){}
+        if(!c){ etat('Incorrect Board Configuration: must complete X by X rectangle - use bdNull'); return; }
+        cases.push(c);
+      }
+    } else {
+      let c = null;
+      try { c = _bpCaseDuRang(sel.selectedIndex - 1); } catch(e){}
+      if(!c){ etat('Incorrect Board Configuration: must complete X by X rectangle - use bdNull'); return; }
+      cases.push(c);
+    }
+    for(const c of cases){
+      c.terrain = c.terrain + '\t' + regles;
+      if(c.board) _bpTerrain(c, base + c.terrain);
+    }
+    _teReset(ed, false);
+  };
+  q('reset').onclick = () => {
+    _teReset(ed, true);
+    for(const c of _bp.cases){
+      c.terrain = '';
+      if(c.board) _bpTerrain(c, '');
+    }
+    etat('Back to normal');
+  };
+}
+function fermerTerrain(){
+  if(!_te) return;
+  _te.w.remove(); _te.voile.remove();
+  _te = null;
+}
+// reset(optionGroup), et les options de base avec tout.
+function _teReset(ed, tout){
+  for(const o of [...(tout ? ed.base : []), ...ed.groupe]) o.reset();
+}
+// optionRules : les règles de chaque réglage, séparées par une tabulation
+// quand il y a déjà quelque chose (chaque règle finit déjà par la sienne).
+function _teReglesOptions(ed){
+  let s = '';
+  for(const o of ed.groupe){
+    const r = o.regle();
+    s = s.length > 0 && r.length > 0 ? s + '\t' + r : s + r;
+  }
+  return s;
+}
+// ASLBoard.setTerrain : les règles écrites du board, et son aperçu.
+function _bpTerrain(c, terrain){
+  const b = c.board;
+  b.terrain = terrain;
+  b.ssrList = _reglesDuTerrain(terrain);
+  b.ssrModifie = true;
+  b._comp = b._compPlein = null;
+  _bpApercu(c);
 }
