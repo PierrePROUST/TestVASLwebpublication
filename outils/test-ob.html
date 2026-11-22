@@ -12,9 +12,8 @@
   Elle montre, fiche par fiche, l'image extraite puis, case par case, la
   découpe et ce qui en a été lu. Le bouton « Exporter » donne les
   résultats en JSON, pour les comparer à ceux du prototype Python.
-  Pour l'instant : cases de pions (pions.py) et schéma des boards
-  (schema.py), portés à l'identique ; les verdicts des pions viendront
-  avec la lecture de l'OB.
+  Carte : js/ob-carte.js ; OB : js/ob-lecture.js (verdicts écrits comme
+  les res*.txt du prototype, pour la comparaison).
 -->
 <style>
 :root{
@@ -63,8 +62,8 @@ code{font-size:12px}
 
 <div class="barre">
   <input type="file" id="pdf" accept="application/pdf,.pdf" multiple>
-  <label><input type="checkbox" id="vPions" checked> cases de pions</label>
-  <label><input type="checkbox" id="vSchema" checked> schéma des boards (OCR)</label>
+  <label><input type="checkbox" id="vSchema" checked> carte (schéma des boards)</label>
+  <label><input type="checkbox" id="vPions" checked> OB (pions)</label>
   <label>workers <select id="nw"></select></label>
   <button id="arreter" disabled>Arrêter</button>
   <button id="exporter" disabled>Exporter (JSON)</button>
@@ -75,6 +74,9 @@ code{font-size:12px}
 <script src="../js/ob-image.js"></script>
 <script src="../js/ob-pdf.js"></script>
 <script src="../js/ob-ocr.js"></script>
+<script src="../js/donnees/ob-reference.js"></script>
+<script src="../js/ob-lecture.js"></script>
+<script src="../js/ob-carte.js"></script>
 <script>
 'use strict';
 const O = obImage;
@@ -101,55 +103,7 @@ function el(tag, attrs = {}, ...enfants){
   return e;
 }
 
-// Cadres formés de traits longs (pions.py, schema.py) : contours des
-// zones blanches entre les traits.
-function grille(g, Lh, Lv){
-  const bw = O.binariserOtsu(g, true).img;
-  const hl = O.ouvrir(bw, Lh, 1), vl = O.ouvrir(bw, 1, Lv);
-  return O.dilater(O.ou(hl, vl), 3, 3);
-}
-
-// ── pions.py ────────────────────────────────────────────────────
-function casesPions(g){
-  const W = g.w, L = Math.floor(W / 60);
-  const cases = [];
-  for(const c of O.contours(O.inverser(grille(g, L, L)), 'ccomp'))
-    if(0.045 * W < c.w && c.w < 0.09 * W && 0.8 < c.h / c.w && c.h / c.w < 1.6 && c.aire > 0.8 * c.w * c.h)
-      cases.push([c.x, c.y, c.w, c.h]);
-  cases.sort((a, b) => Math.floor(a[1] / 40) - Math.floor(b[1] / 40) || a[0] - b[0]);
-  return cases;
-}
-
-// ── schema.py ───────────────────────────────────────────────────
-async function schema(g){
-  const W = g.w, H = g.h, L = Math.floor(Math.max(W, H) / 40);
-  const cells = [];
-  for(const c of O.contours(O.inverser(grille(g, L, L)), 'ccomp')){
-    const a = c.w * c.h;
-    if(a < W * H / 2000 || a > W * H / 15) continue;
-    if(c.aire < 0.85 * a) continue;
-    const r = Math.max(c.w, c.h) / Math.min(c.w, c.h);
-    if(1.3 < r && r < 4.5) cells.push([c.x, c.y, c.w, c.h]);
-  }
-  const res = await Promise.all(cells.map(async ([x, y, w, h]) => {
-    const crop = O.tranche(g, y + 4, y + h - 4, x + 4, x + w - 4);
-    let best = null;
-    for(const [ang, rot] of [[0, null], [90, 'horaire'], [180, '180'], [270, 'antihoraire']]){
-      const im = O.redimensionner(rot ? O.pivoter(crop, rot) : crop, 2, 2);
-      const r = await obOcr.lire(im, {psm: 11, liste: '0123456789', donnees: true});
-      for(const m of obOcr.mots(r.tsv)){
-        const t = m.texte.trim();
-        if(/^\d{1,2}$/.test(t) && m.conf > 60 && (!best || m.conf > best[2])) best = [t, ang, m.conf];
-      }
-    }
-    return {cas: [x, y, w, h], crop, best};
-  }));
-  res.sort((a, b) => a.cas[1] - b.cas[1] || a.cas[0] - b.cas[0]);
-  return {nbCandidates: cells.length, cases: res};
-}
-
 function dessinerVignette(rgba, cases, cells){
-  const k = 340 / rgba.w;
   const c = document.createElement('canvas');
   c.width = rgba.w; c.height = rgba.h;
   const cx = c.getContext('2d');
@@ -157,9 +111,9 @@ function dessinerVignette(rgba, cases, cells){
   cx.lineWidth = Math.max(3, rgba.w / 500);
   cx.font = `bold ${Math.round(rgba.w / 60)}px system-ui`;
   cx.strokeStyle = cx.fillStyle = '#1f9d55';
-  (cases || []).forEach(([x, y, w, h], i) => { cx.strokeRect(x, y, w, h); cx.fillText(i, x + 4, y + rgba.w / 60); });
+  (cases || []).forEach(({cas: [x, y, w, h], i}) => { cx.strokeRect(x, y, w, h); cx.fillText(i, x + 4, y + rgba.w / 60); });
   cx.strokeStyle = cx.fillStyle = '#c0392b';
-  (cells || []).forEach(({cas: [x, y, w, h], best}) => { cx.strokeRect(x, y, w, h); if(best) cx.fillText(best[0] + ' ' + best[1] + '°', x + 6, y + h - 8); });
+  (cells || []).forEach(({cas: [x, y, w, h], board, sens}) => { cx.strokeRect(x, y, w, h); if(board) cx.fillText((sens === 'retourné' ? 'r' : '') + board, x + 6, y + h - 8); });
   c.className = 'vignette';
   c.title = 'Agrandir / réduire';
   c.onclick = () => c.classList.toggle('grande');
@@ -175,45 +129,46 @@ async function traiter(fichier){
   try { img = await obImageDuPdf(fichier); }
   catch(e){ bloc.append(el('div', {className: 'erreur', textContent: e.message})); r.erreur = e.message; return; }
   r.image = {largeur: img.rgba.w, hauteur: img.rgba.h, source: img.source, nbImages: img.nbImages, ms: img.ms, texte: img.texte};
-  const info = el('div', {className: 'doux', textContent:
+  bloc.append(el('div', {className: 'doux', textContent:
     `${img.rgba.w} × ${img.rgba.h} px · ${img.source === 'jpeg' ? 'JPEG du PDF, tel quel' : 'rendu par pdf.js'}`
     + (img.nbImages > 1 ? ` · ${img.nbImages} images (la plus grande est prise)` : '') + ` · ${img.ms} ms`
-    + (img.texte ? ` · texte : « ${img.texte.slice(0, 80)}… »` : '')});
-  const haut = el('div', {className: 'haut'});
-  bloc.append(info, haut);
-  const t0 = performance.now();
-  let cases = null, sch = null;
-  if($('vPions').checked){
-    cases = casesPions(img.gris);
-    r.pions = {cases, ms: Math.round(performance.now() - t0)};
-  }
+    + ` · scénario n° ${obCarte.numeroScenario(fichier.name, img.texte) || '?'}`}));
+  const haut = el('div', {className: 'haut'}), droite = el('div', {className: 'defile'});
+  bloc.append(haut);
+  const fiche = {rgba: img.rgba, gris: img.gris};
+  let carte = null, ob = null;
   if($('vSchema').checked && !_arret){
-    const t1 = performance.now();
-    try { sch = await schema(img.gris); }
+    const t0 = performance.now();
+    const cad = obLecture.cadresOb(img.gris, obLecture.casesPions(img.gris));
+    try { carte = await obCarte.lireSchema(fiche, {limiteY: cad.cadres.length ? cad.cadres[0][1] : null}); }
     catch(e){ if(e.message !== OB_ARRET) throw e; }
-    if(sch) r.schema = {nbCandidates: sch.nbCandidates, cases: sch.cases.map(c => ({cas: c.cas, board: c.best && c.best[0], angle: c.best && c.best[1], conf: c.best && c.best[2]})), ms: Math.round(performance.now() - t1)};
+    if(carte){
+      const g = Array.from({length: carte.ny}, () => Array(carte.nx).fill('·'));
+      for(const b of carte.boards) g[b.row][b.col] = (b.reversed ? 'r' : '') + b.numero + (b.sens === 'incertain' ? ' (sens ?)' : '');
+      for(const v of carte.vides) g[v.row][v.col] = '□ à choisir';
+      r.carte = {grille: g, vertical: carte.vertical, boards: carte.boards.map(b => ({nom: b.nom, col: b.col, row: b.row, reversed: b.reversed, sens: b.sens, angle: b.angle, conf: b.conf})), ms: Math.round(performance.now() - t0)};
+      droite.append(el('h3', {textContent: `Carte (${carte.vertical ? 'boards debout, carte pivotée' : 'boards couchés'}), ${r.carte.ms} ms`}),
+        el('table', {}, ...g.map(l => el('tr', {}, ...l.map(x => el('td', {textContent: x}))))));
+    }
   }
-  haut.append(dessinerVignette(img.rgba, cases, sch && sch.cases));
-  const droite = el('div', {className: 'defile'});
-  haut.append(droite);
-  if(sch){
-    droite.append(el('h3', {textContent: `Schéma des boards : ${sch.cases.length} cases (${sch.nbCandidates} candidates), ${r.schema.ms} ms`}));
-    const tb = el('table', {}, el('tr', {}, el('th', {textContent: 'case'}), el('th', {textContent: 'découpe'}), el('th', {textContent: 'board lu'}), el('th', {textContent: 'tourné de'}), el('th', {textContent: 'confiance'})));
-    for(const c of sch.cases) tb.append(el('tr', {},
-      el('td', {}, el('code', {textContent: c.cas.join(', ')})), el('td', {}, canvasDe(c.crop, Math.min(1, 160 / c.crop.w))),
-      el('td', {textContent: c.best ? c.best[0] : '—'}), el('td', {textContent: c.best ? c.best[1] + '°' : ''}),
-      el('td', {textContent: c.best ? c.best[2].toFixed(0) : ''})));
-    droite.append(tb);
+  if($('vPions').checked && !_arret){
+    const t0 = performance.now();
+    try { ob = await obLecture.lireFiche(fiche, {arret: () => _arret}); }
+    catch(e){ if(e.message !== OB_ARRET) throw e; }
+    if(ob){
+      r.ob = {nat_de: ob.nat_de, nations_piste: ob.nations_piste, res: ob.cases.map(c => c.verdict ? obLecture.ligneRes(c) : `${c.i} (non lu)`), ms: Math.round(performance.now() - t0)};
+      droite.append(el('h3', {textContent: `OB : ${ob.cases.length} cases, ${(r.ob.ms / 1000).toFixed(1)} s — piste : ${ob.nations_piste.join(', ') || '?'}`}));
+      const tb = el('table', {}, el('tr', {}, el('th', {textContent: 'n°'}), el('th', {textContent: 'découpe'}), el('th', {textContent: 'nation'}), el('th', {textContent: 'verdict'}), el('th', {textContent: 'qté'})));
+      for(const c of ob.cases){
+        const [x, y, w, h] = c.cas;
+        tb.append(el('tr', {}, el('td', {textContent: c.i}), el('td', {}, canvasDe(O.tranche(img.gris, y, y + Math.round(h * 1.5), x, x + w))),
+          el('td', {textContent: c.nat}), el('td', {}, el('code', {textContent: c.verdict || '(non lu)'})),
+          el('td', {textContent: (c.q === null ? '?' : c.q) + (c.qlu && String(c.q) !== c.qlu ? ` (lu ${c.qlu})` : '')})));
+      }
+      droite.append(tb);
+    }
   }
-  if(cases){
-    droite.append(el('h3', {textContent: `Cases de pions : ${cases.length} (${r.pions.ms} ms)`}));
-    const tb = el('table', {}, el('tr', {}, el('th', {textContent: 'n°'}), el('th', {textContent: 'découpe'}), el('th', {textContent: 'x, y, l, h'}), el('th', {textContent: 'verdict'})));
-    cases.forEach(([x, y, w, h], i) => tb.append(el('tr', {},
-      el('td', {textContent: i}), el('td', {}, canvasDe(O.tranche(img.gris, y, y + h, x, x + w))),
-      el('td', {}, el('code', {textContent: [x, y, w, h].join(', ')})),
-      el('td', {className: 'doux', textContent: 'lecture de l’OB : à venir'}))));
-    droite.append(tb);
-  }
+  haut.append(dessinerVignette(img.rgba, ob && ob.cases, carte && carte.cases), droite);
 }
 
 $('pdf').onchange = async () => {
@@ -225,7 +180,7 @@ $('pdf').onchange = async () => {
   obOcr.remettreCompteurs();
   const t0 = performance.now();
   try {
-    if($('vSchema').checked){
+    if($('vSchema').checked || $('vPions').checked){
       etat('Chargement du moteur d’OCR…');
       await obOcr.demarrer({n: +$('nw').value, surProgression: progression});
     }
