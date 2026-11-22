@@ -57,6 +57,7 @@ function basculerVueCarte(){
 // palette.
 const ICONE_BRISES = {gpid: '482', ico: '⭕'};
 const ICONE_SNIPER = {gpid: '778', ico: '🎯'};
+const ICONE_NOUVELLE = {gpid: '3b5:7124', ico: '🆕'};
 const _reperes = {brises: false, sniper: false};
 function basculerRepere(q){
   _reperes[q] = !_reperes[q];
@@ -116,6 +117,10 @@ const ICONE_LOS = 'https://raw.githubusercontent.com/vassalengine/vassal/master/
 
 const ACTIONS = {
   ouvrir:   {lib: 'Ouvrir .vsav / .vlog', court: 'Ouvrir', ico: '📂', faire: doOpen},
+  // New Game : la partie neuve du module, puis le choix des boards. Icône :
+  // le pion Bayonet Charge du module.
+  nouvelle: {lib: 'Nouvelle partie (choix des boards)…', court: 'Nouvelle', ico: '🆕', pion: ICONE_NOUVELLE,
+             faire: () => nouvellePartie()},
   vsav:     {lib: 'Exporter .vsav', court: 'Exporter', ico: '💾', faire: ecrireVsav, actif: () => !!_source},
   log:      {lib: () => enregistreLog() ? `Terminer le log « ${_logNom} » et l'écrire` : 'Commencer un fichier de log',
              court: () => enregistreLog() ? '⏹ Log' : 'Log', ico: '⏺', classe: 'enreg',
@@ -456,7 +461,7 @@ const DISPOSITIONS = {
     // comme celle de l'affichage tactile (Alt l'ouvre).
     // Masqués à la demande : sélection des cartes et panneaux, effectif
     // des piles (LOS détaillée : dans la roue et au clic droit sur LOS).
-    barre: ['ouvrir', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'zoom100',
+    barre: ['ouvrir', 'nouvelle', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'zoom100',
             'rotGauche', 'rotDroite', 'rot180', 'rot0',
             '|', 'relecture', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'sanPieges',
             '|', 'pions', 'journal', '|', 'reseau', 'utilisateur', '|', 'config', 'raccourcis'],
@@ -687,7 +692,7 @@ function placerColonne(c){
 // verrou des pions, effectif des piles, aperçu du chat, raccourcis. La
 // sélection des overlays reste : sans elle, un overlay posé ne pourrait
 // plus être ni déplacé ni retiré au doigt.
-const RAIL_TACTILE = ['ouvrir', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables',
+const RAIL_TACTILE = ['ouvrir', 'nouvelle', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables',
   'oba', 'bin', 'couche_overlay', 'rotDroite', 'rot180', 'sanPieges'];
 // Réglages de la roue ⚙ en affichage tactile : préférences (utilisateur,
 // LOS, décompte), identification, partie à distance, dés 3D, côté de la

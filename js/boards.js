@@ -193,7 +193,9 @@ const _memeCrop = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === 
 let _bp = null;            // dialogue ouvert
 let _bpEnCours = false;    // carte en cours de recomposition
 
-function ouvrirChoixBoards(){
+// nouvelle : partie neuve (nouvellePartie) — grille vide, et l'état
+// complet renvoyé à la salle après Ok, la carte n'étant faite qu'alors.
+function ouvrirChoixBoards({nouvelle = false} = {}){
   if(_bp || _bpEnCours) return;
   if(!_source || !_losBoards){ chatLog('⚠️ Aucune partie ouverte'); return; }
   fermerMenu();
@@ -222,7 +224,7 @@ function ouvrirChoixBoards(){
       <div class="fb"><button type="button" class="prim" data-bp="ok">Ok</button><button type="button" data-bp="annuler">Cancel</button></div>
     </div>`;
   document.body.append(voile, w);
-  _bp = {w, voile, releve, nx: 1, ny: 1, cases: [], liste: null, etatMin: null};
+  _bp = {w, voile, releve, nouvelle, nx: 1, ny: 1, cases: [], liste: null, etatMin: null};
   // Les touches ne vont ni aux pions sélectionnés ni aux raccourcis.
   w.addEventListener('keydown', e => {
     e.stopPropagation();
@@ -240,8 +242,9 @@ function ouvrirChoixBoards(){
   q('terrain').onclick = () => ouvrirTerrain();
   q('annuler').onclick = () => fermerChoixBoards();
   q('ok').onclick = () => validerChoixBoards();
-  // getControls : reset(), puis setBoards(map.getBoards()).
-  _bpPoserBoards(_losBoards.map(b => Object.assign(_copieBoard(b), {col: b.col, row: b.row})));
+  // getControls : reset(), puis setBoards(map.getBoards()) ; pour une
+  // nouvelle partie, reset() seul.
+  _bpPoserBoards(nouvelle ? [] : _losBoards.map(b => Object.assign(_copieBoard(b), {col: b.col, row: b.row})));
   _bpRendre();
   listeBoards().then(l => {
     if(_bp && _bp.w === w){ _bp.liste = l; for(const c of _bp.cases) _bpRemplirListe(c, c.rech.value); }
@@ -493,7 +496,7 @@ async function validerChoixBoards(){
     if(c && c.board) boards.push(Object.assign(_copieBoard(c.board), {col: i, row: j}));
   }
   if(!boards.length){ _bpEtat('No boards selected'); return; }
-  const manque = _bp.nx * _bp.ny !== boards.length, releve = _bp.releve;
+  const manque = _bp.nx * _bp.ny !== boards.length, releve = _bp.releve, nouvelle = _bp.nouvelle;
   fermerChoixBoards();
   if(manque){
     // Chatter.send : affiché, envoyé et consigné.
@@ -502,6 +505,8 @@ async function validerChoixBoards(){
     afficherChat(msg);
   }
   await appliquerBoards(boards, releve);
+  // Partie neuve dans une salle : les autres joueurs reçoivent la carte faite.
+  if(nouvelle && typeof netPartieChargee === 'function') netPartieChargee();
 }
 
 // SetBoards exécutée ici seulement (ni M/, ni log, ni réseau), puis les
