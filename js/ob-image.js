@@ -415,8 +415,8 @@ function flou3(im){
 // défaut de cv2.resize) : coefficients en virgule fixe sur 11 bits, bords
 // répétés ; passe verticale comme OpenCV : en flottant 32 bits pour le
 // cubique, par la formule entière de ses instructions vectorielles pour
-// le linéaire. 'aire' (INTER_AREA) : réductions d'un facteur entier
-// seulement (moyenne des blocs).
+// le linéaire. 'aire' (INTER_AREA) : réductions (moyenne des blocs pour
+// un facteur entier, pondérée sinon).
 // Vérifié identique au pixel près à OpenCV 5.1 (×1,5 à ×5) ; quand OpenCV
 // passe par IPP (selon la machine), son cubique s'écarte lui-même de ±1
 // sur environ 0,3 % des pixels.
@@ -495,8 +495,7 @@ function redimensionner(im, fx, fy, mode = 'lineaire'){
 }
 function _reduireAire(im, fx, fy, W, H){
   const sx = Math.round(1 / fx), sy = Math.round(1 / fy);
-  if(Math.abs(1 / fx - sx) > 1e-9 || Math.abs(1 / fy - sy) > 1e-9)
-    throw new Error('obImage.redimensionner : réduction « aire » d’un facteur entier seulement');
+  if(Math.abs(1 / fx - sx) > 1e-9 || Math.abs(1 / fy - sy) > 1e-9) return _aireGenerale(im, fx, fy, W, H);
   const d = new Uint8Array(W * H), n = sx * sy;
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
     let v = 0, c = 0;
@@ -512,6 +511,47 @@ function _reduireAire(im, fx, fy, W, H){
     d[y * W + x] = c === n ? Math.floor((v + (n >> 1)) / n) : sat8(arrondi(f32(v / c)));
   }
   return {w: W, h: H, d};
+}
+// INTER_AREA d'un facteur quelconque (computeResizeAreaTab d'OpenCV) :
+// moyenne pondérée par la part de chaque pixel de départ, en flottant.
+function _tableAire(n, N, echelle){
+  const tab = [];
+  for(let dx = 0; dx < N; dx++){
+    const f1 = dx * echelle, f2 = f1 + echelle, larg = Math.min(echelle, n - f1);
+    let s1 = Math.ceil(f1), s2 = Math.floor(f2);
+    s2 = Math.min(s2, n - 1); s1 = Math.min(s1, s2);
+    const t = [];
+    if(s1 - f1 > 1e-3) t.push([s1 - 1, f32((s1 - f1) / larg)]);
+    for(let k = s1; k < s2; k++) t.push([k, f32(1 / larg)]);
+    if(f2 - s2 > 1e-3) t.push([s2, f32(Math.min(Math.min(f2 - s2, 1), larg) / larg)]);
+    tab.push(t);
+  }
+  return tab;
+}
+function _aireGenerale(im, fx, fy, W, H){
+  const tx = _tableAire(im.w, W, 1 / fx), ty = _tableAire(im.h, H, 1 / fy);
+  const lignes = new Float32Array(im.h * W);
+  for(let y = 0; y < im.h; y++) for(let x = 0; x < W; x++){
+    let v = 0;
+    for(const [k, a] of tx[x]) v = f32(v + f32(im.d[y * im.w + k] * a));
+    lignes[y * W + x] = v;
+  }
+  const d = new Uint8Array(W * H);
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+    let v = 0;
+    for(const [k, b] of ty[y]) v = f32(v + f32(lignes[k * W + x] * b));
+    d[y * W + x] = sat8(arrondi(v));
+  }
+  return {w: W, h: H, d};
+}
+
+// Découpe d'une image en couleur (RVBA), comme tranche.
+function trancheCouleur(im, y0, y1, x0, x1){
+  const a = _borne(y0, im.h, 0), b = Math.max(a, _borne(y1, im.h, im.h));
+  const c = _borne(x0, im.w, 0), e = Math.max(c, _borne(x1, im.w, im.w));
+  const w = e - c, h = b - a, d = new Uint8ClampedArray(w * h * 4);
+  for(let y = 0; y < h; y++) d.set(im.d.subarray(((a + y) * im.w + c) * 4, ((a + y) * im.w + e) * 4), y * w * 4);
+  return {w, h, d};
 }
 
 // ── Passage vers l'OCR et l'écran ───────────────────────────────
@@ -533,7 +573,7 @@ function versRVBA(im){
 }
 
 return {
-  creer, copier, arrondi, tranche,
+  creer, copier, arrondi, tranche, trancheCouleur,
   gris, hsv, masqueRouge,
   otsu, binariser, binariserOtsu,
   inverser, soustraire, ou, boiteNonNulle, compterNonNuls,
