@@ -160,6 +160,9 @@ const ACTIONS = {
   // prendre (pwa.js) ; hors PWA (file://), recharger la page.
   miseAJour:{lib: 'Mise à jour de VASLweb', court: 'Mise à jour', ico: '🔄',
              faire: () => typeof window.miseAJourVaslweb === 'function' ? window.miseAJourVaslweb() : location.reload()},
+  // Retélécharger les boards, overlays et motifs gardés en cache (carte.js).
+  majCartes:{lib: 'Mise à jour des cartes (boards en cache)', court: 'Cartes', ico: '🗺️',
+             faire: () => miseAJourCartes()},
   prefLOS:  {lib: 'Préférences de la LOS (couleurs)…', court: 'Préférences', ico: '⚙', faire: () => ouvrirPreferences('los')},
   zoomMoins:{lib: 'Zoom arrière', ico: '−', faire: zoomOut},
   zoomPlus: {lib: 'Zoom avant', ico: '+', faire: zoomIn},
@@ -478,7 +481,7 @@ const DISPOSITIONS = {
 // Réglages de la roue ⚙ du PC : ce que les menus étaient seuls à offrir
 // et qui n'a pas sa place dans la barre d'icônes.
 const CONFIG_PC = ['preferences', 'prefLOS', 'verbeux', '-', 'couche_unite', 'couche_marqueur', 'couche_overlay', '-',
-  'chatHaut', 'des3d', '-', 'profil_auto', 'profil_pc', 'profil_tactile', '-', 'miseAJour'];
+  'chatHaut', 'des3d', '-', 'profil_auto', 'profil_pc', 'profil_tactile', '-', 'miseAJour', 'majCartes'];
 function basculerConfig(){
   if(_feuilles.has('feuilleConfig')){ fermerFeuille('feuilleConfig'); return; }
   const f = ouvrirFeuilleActions('Configuration', _telLike() ? CONFIG_TACTILE : CONFIG_PC, 'feuilleConfig');
@@ -698,7 +701,7 @@ const RAIL_TACTILE = ['ouvrir', 'nouvelle', 'vsav', 'log', 'los', 'losMuet', 'un
 // LOS, décompte), identification, partie à distance, dés 3D, côté de la
 // colonne, affichage ordinateur, mise à jour.
 const CONFIG_TACTILE = ['preferences', 'verbeux', '-', 'utilisateur', 'reseau', '-',
-  'des3d', 'coteColonne', '-', 'profil_pc', '-', 'miseAJour'];
+  'des3d', 'coteColonne', '-', 'profil_pc', '-', 'miseAJour', 'majCartes'];
 
 // SAN et pièges : les champs eux-mêmes viennent dans la feuille, et
 // retournent à l'onglet Dés quand elle se ferme.

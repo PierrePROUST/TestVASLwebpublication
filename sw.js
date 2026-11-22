@@ -16,7 +16,7 @@
 // et de VASLweb.html, pour qu'une page neuve ne prenne jamais un script de
 // la version d'avant dans un cache HTTP.
 // APP : tout fichier de l'application.
-const VERSION = 'ob-pdf';
+const VERSION = 'maj-cartes';
 const CACHE_APP = 'vaslweb-app-' + VERSION;
 // Nom fixe ; « -v1 » garde le cache des boards des versions d'avant.
 const CACHE_VASL = 'vaslweb-vasl-v1';
@@ -31,44 +31,44 @@ const APP = [
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
   './modeles/nouvelle-partie.vsav',
-  './pwa.js?v=ob-pdf',
-  './css/vaslweb.css?v=ob-pdf',
-  './js/outils.js?v=ob-pdf',
-  './js/donnees/ssr.js?v=ob-pdf',
-  './js/donnees/overlays-ext.js?v=ob-pdf',
-  './js/donnees/mouvement.js?v=ob-pdf',
-  './js/langue.js?v=ob-pdf',
-  './js/noyau.js?v=ob-pdf',
-  './js/fichiers.js?v=ob-pdf',
-  './js/carte.js?v=ob-pdf',
-  './js/hexagones.js?v=ob-pdf',
-  './js/los-moteur.js?v=ob-pdf',
-  './js/los-pions.js?v=ob-pdf',
-  './js/los-fil.js?v=ob-pdf',
-  './js/pieces.js?v=ob-pdf',
-  './js/pions.js?v=ob-pdf',
-  './js/boards.js?v=ob-pdf',
-  './js/vlog.js?v=ob-pdf',
-  './js/mf.js?v=ob-pdf',
-  './js/commandes.js?v=ob-pdf',
-  './js/chat-rapports.js?v=ob-pdf',
-  './js/flare.js?v=ob-pdf',
-  './js/cvp.js?v=ob-pdf',
-  './js/dissimulation.js?v=ob-pdf',
-  './js/tactile.js?v=ob-pdf',
-  './js/bdd.js?v=ob-pdf',
-  './js/qrdc.js?v=ob-pdf',
-  './js/oba.js?v=ob-pdf',
-  './js/des-utilisateurs.js?v=ob-pdf',
-  './js/des-3d.js?v=ob-pdf',
-  './js/ift.js?v=ob-pdf',
-  './js/reseau.js?v=ob-pdf',
-  './js/export.js?v=ob-pdf',
-  './js/preferences.js?v=ob-pdf',
-  './js/qc.js?v=ob-pdf',
-  './js/interface.js?v=ob-pdf',
-  './js/chat.js?v=ob-pdf',
-  './js/menus.js?v=ob-pdf'
+  './pwa.js?v=maj-cartes',
+  './css/vaslweb.css?v=maj-cartes',
+  './js/outils.js?v=maj-cartes',
+  './js/donnees/ssr.js?v=maj-cartes',
+  './js/donnees/overlays-ext.js?v=maj-cartes',
+  './js/donnees/mouvement.js?v=maj-cartes',
+  './js/langue.js?v=maj-cartes',
+  './js/noyau.js?v=maj-cartes',
+  './js/fichiers.js?v=maj-cartes',
+  './js/carte.js?v=maj-cartes',
+  './js/hexagones.js?v=maj-cartes',
+  './js/los-moteur.js?v=maj-cartes',
+  './js/los-pions.js?v=maj-cartes',
+  './js/los-fil.js?v=maj-cartes',
+  './js/pieces.js?v=maj-cartes',
+  './js/pions.js?v=maj-cartes',
+  './js/boards.js?v=maj-cartes',
+  './js/vlog.js?v=maj-cartes',
+  './js/mf.js?v=maj-cartes',
+  './js/commandes.js?v=maj-cartes',
+  './js/chat-rapports.js?v=maj-cartes',
+  './js/flare.js?v=maj-cartes',
+  './js/cvp.js?v=maj-cartes',
+  './js/dissimulation.js?v=maj-cartes',
+  './js/tactile.js?v=maj-cartes',
+  './js/bdd.js?v=maj-cartes',
+  './js/qrdc.js?v=maj-cartes',
+  './js/oba.js?v=maj-cartes',
+  './js/des-utilisateurs.js?v=maj-cartes',
+  './js/des-3d.js?v=maj-cartes',
+  './js/ift.js?v=maj-cartes',
+  './js/reseau.js?v=maj-cartes',
+  './js/export.js?v=maj-cartes',
+  './js/preferences.js?v=maj-cartes',
+  './js/qc.js?v=maj-cartes',
+  './js/interface.js?v=maj-cartes',
+  './js/chat.js?v=maj-cartes',
+  './js/menus.js?v=maj-cartes'
 ];
 const HOTES_VASL = ['raw.githubusercontent.com', 'unpkg.com', 'cdn.jsdelivr.net'];
 
@@ -121,6 +121,12 @@ async function cacheDabord(req, cache){
   return r;
 }
 
+async function rafraichir(req, cache){
+  const r = await fetch(req);
+  if(r.ok) (await caches.open(cache)).put(req.url, r.clone());
+  return r;
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if(req.method !== 'GET') return;
@@ -139,6 +145,10 @@ self.addEventListener('fetch', e => {
   }
 
   if(HOTES_VASL.includes(url.hostname)){
+    // « Mise à jour des cartes » (roue ⚙) : la page demande le fichier
+    // avec cache: 'reload' ; il est pris au réseau et remplace celui du
+    // cache. Pas de repli sur le cache : un échec doit se voir.
+    if(req.cache === 'reload'){ e.respondWith(rafraichir(req, CACHE_VASL)); return; }
     const variable = /\.xml$|\/buildFile$/i.test(url.pathname);
     e.respondWith(variable ? reseauDabord(req, CACHE_VASL) : cacheDabord(req, CACHE_VASL));
   }
