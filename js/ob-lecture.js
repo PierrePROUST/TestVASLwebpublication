@@ -734,7 +734,9 @@ function couleurCadre(rgba, [x, y, w, h]){
   for(let i = 0; i < t.S.length; i++) if(t.S[i] > 90 && t.V[i] > 60) n++;
   return t.S.length ? n / t.S.length : 0;
 }
-async function separerOb(rgba, g, cases){
+// Cadres d'OB (géométrie seule) : grands rectangles de traits longs, sous
+// les 20 % du haut ; un cadre sans pion n'est pas un OB.
+function cadresOb(g, cases){
   const W = g.w, H = g.h, L = Math.floor(W / 25);
   let cadres = [];
   for(const c of O.contours(grille(g, L, Math.floor(L / 3)), 'externe'))
@@ -743,7 +745,11 @@ async function separerOb(rgba, g, cases){
   const dans = (r, b) => b[0] <= r[0] + r[2] / 2 && r[0] + r[2] / 2 <= b[0] + b[2] && b[1] <= r[1] + r[3] / 2 && r[1] + r[3] / 2 <= b[1] + b[3];
   let parCadre = cadres.map(b => cases.filter(r => dans(r, b)));
   const garde = parCadre.map((pc, i) => pc.length ? i : -1).filter(i => i >= 0);
-  cadres = garde.map(i => cadres[i]); parCadre = garde.map(i => parCadre[i]);
+  return {cadres: garde.map(i => cadres[i]), parCadre: garde.map(i => parCadre[i])};
+}
+async function separerOb(rgba, g, cases){
+  const W = g.w, H = g.h;
+  let {cadres, parCadre} = cadresOb(g, cases);
   // nations de la piste des tours : bande au-dessus du premier cadre
   const y1 = cadres.length ? cadres[0][1] : ent(H * .45);
   const bande = O.tranche(g, Math.max(0, y1 - ent(.10 * H)), y1, 0, ent(W * .40));
@@ -893,7 +899,7 @@ async function lireCase(fiche, [x, y, w, h], nat){
 // fiche : {rgba, gris} (obImageDuPdf). options : {separation} pour imposer
 // la séparation des OB ({C, nat_de} comme le prototype), surCase(r) appelé
 // à chaque case lue (ordre d'arrivée), arret() vrai pour arrêter.
-async function lireFiche(fiche, {separation = null, surCase = null, arret = () => false} = {}){
+async function lireFiche(fiche, {separation = null, surCase = null, surSeparation = null, arret = () => false} = {}){
   const g = fiche.gris, rgba = fiche.rgba;
   let sep;
   if(separation) sep = {nations_piste: [], cadres: [], C: separation.C, nat_de: separation.nat_de};
@@ -906,7 +912,9 @@ async function lireFiche(fiche, {separation = null, surCase = null, arret = () =
   const lim = Object.entries(sep.nat_de).map(([l, n]) => [+l, n]).sort((a, b) => a[0] - b[0]);
   if(lim.length) lim[lim.length - 1][0] = Infinity;
   const natDe = y => (lim.find(([l]) => y < l) || [0, '?'])[1];
-  const cases = sep.C.map((cas, i) => ({i, cas, nat: natDe(cas[1])}));
+  // groupe : rang du cadre (bas du cadre au-dessus de la case)
+  const cases = sep.C.map((cas, i) => ({i, cas, nat: natDe(cas[1]), groupe: lim.findIndex(([l]) => cas[1] < l)}));
+  if(surSeparation) surSeparation(Object.assign({}, sep, {cases}));
   await enOrdre(cases.map(async r => {
     if(arret()) return;
     try { Object.assign(r, await lireCase({g, rgba}, r.cas, r.nat)); }
@@ -926,7 +934,7 @@ function ligneRes(r){
   return `${String(r.i).padStart(2)} ${r.nat.slice(0, 3)} ${v} ×${q}` + (r.qlu && String(r.q) !== r.qlu ? `  (rouge lu « ${r.qlu} »)` : '');
 }
 
-return {casesPions, separerOb, lireFiche, lireCase, ligneRes, lev, Compteur, cle,
+return {casesPions, cadresOb, separerOb, lireFiche, lireCase, ligneRes, lev, Compteur, cle,
   _interne: {lireSw, lireLeader, rougeQuantite, lireCanon, lireVehicule, parCaracteres, lecturesBas}};
 })();
 if(typeof module === 'object' && module.exports) module.exports = obLecture;

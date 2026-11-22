@@ -31,6 +31,55 @@ def lancer(script, *args):
         sys.exit(f'{script} : échec\n{r.stderr}')
     print(f'{script} :', r.stdout.strip().splitlines()[0] if r.stdout.strip() else '')
 
+# Leaders d'infanterie : couches de la case « xxLDR » de la nation, images
+# préfixe + « L » + valeur (ruL92, ruL61 pour 6+1), relevées dans les traits
+# emb2 du buildFile comme vaslmap.py le fait pour les squads.
+LEADERS = ['10-3', '10-2', '9-2', '9-1', '8-1', '8-0', '7-0', '6+1']
+def leaders(vasl, chart):
+    import re, xml.etree.ElementTree as ET
+    sys.path.insert(0, os.path.join(ICI, 'ob'))
+    PREF = {'GERMAN':'ge','ITALIAN':'it','Eritrean':'it','FINNISH':'fi','AXIS MINOR':'ax','Hungarian':'ax',
+            'JAPANESE':'ja','ALLIED MINOR':'al','Ethiopian':'al','Polish':'al','RUSSIAN':'ru','AMERICAN':'am',
+            'Army':'am','Early (P.A.)':'am','U.S.M.C.':'am','BRITISH':'br','FRENCH':'fr','CHINESE':'ch',
+            'G.M.D.':'ch','Red':'ch','PARTISAN':'pa'}      # table PREF de vaslmap.py
+    ou = {}
+    for e in ET.parse(os.path.join(vasl, 'dist', 'buildFile')).getroot().iter():
+        if not e.tag.endswith('PieceSlot'): continue
+        for trait in (e.text or '').split('\t'):
+            trait = trait.lstrip('\\')
+            if not trait.startswith('emb2;'): continue
+            lst = re.findall(r'([A-Za-z0-9_]+)\.(?:svg|gif|png)', trait)
+            for i, im in enumerate(dict.fromkeys(lst)):
+                ou.setdefault(im, []).append((e.get('gpid'), e.get('entryName'), i + 1))
+    res = {}
+    for nat in chart:
+        p = PREF.get(nat)
+        if not p: continue
+        for v in LEADERS:
+            im = p + 'L' + re.sub(r'\D', '', v)
+            if ou.get(im): res.setdefault(nat, {})[v] = {im: ou[im][:3]}
+    print('leaders :', sum(len(v) for v in res.values()), 'valeurs reliées')
+    return res
+
+# Image sans couche (vaslmap.py ne relève que les traits emb2) : la case
+# dont c'est l'image de base (crew allemande ge228C…), rang 0 = rien à régler.
+def completerBases(vasl, V):
+    import re, xml.etree.ElementTree as ET
+    base = {}
+    for e in ET.parse(os.path.join(vasl, 'dist', 'buildFile')).getroot().iter():
+        if not e.tag.endswith('PieceSlot'): continue
+        for trait in (e.text or '').split('\t'):
+            trait = trait.lstrip('\\')
+            if not trait.startswith('piece;'): continue
+            for im in re.findall(r'([A-Za-z0-9_]+)\.(?:svg|gif|png)', trait):
+                base.setdefault(im, []).append((e.get('gpid'), e.get('entryName'), 0))
+    n = 0
+    for nat in V.values():
+        for imgs in nat.values():
+            for im, l in imgs.items():
+                if not l and base.get(im): imgs[im] = base[im][:3]; n += 1
+    print('images de base reliées :', n)
+
 def main():
     if len(sys.argv) != 4:
         sys.exit(__doc__ or 'usage : ob-donnees.py vasl guns.json vehicles.json')
@@ -55,6 +104,8 @@ def main():
         'veh': {n: [garder(g, ('gpid', 'nom', 'image', 'calibre', 'MP', 'MG', 'nums', 'autres', 'nom_vt', 'source'))
                     for g in l] for n, l in VE.items()},
     }
+    ref['leaders'] = leaders(vasl, chart)
+    completerBases(vasl, ref['vasl'])
     commit = subprocess.run(['git', '-C', vasl, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True).stdout.strip()
     ref['version'] = {'vasl': commit, 'date': datetime.date.today().isoformat()}
     texte = ('// Données de référence de l\'OB (fiches de scénario) — fichier produit par\n'

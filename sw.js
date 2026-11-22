@@ -3,9 +3,10 @@
 // L'application (VASLweb.html, manifeste, icônes) : réseau d'abord, pour
 // qu'une nouvelle version publiée arrive dès la connexion suivante ; le
 // cache ne sert que hors ligne.
-// Les ressources VASL (raw.githubusercontent.com) et PeerJS (unpkg) :
-// gardées au fil des parties, pour rejouer hors ligne les boards déjà
-// vus. Les métadonnées XML et le buildFile changent avec VASL : réseau
+// Les ressources VASL (raw.githubusercontent.com), PeerJS (unpkg) et les
+// bibliothèques de lecture des PDF de scénario (cdn.jsdelivr.net, versions
+// fixées) : gardées au fil des parties, pour rejouer hors ligne les boards
+// déjà vus. Les métadonnées XML et le buildFile changent avec VASL : réseau
 // d'abord ; les boards, overlays et images : cache d'abord.
 // ═══════════════════════════════════════════════════════════════
 // VERSION change à chaque publication : le cache de la version précédente
@@ -15,7 +16,7 @@
 // et de VASLweb.html, pour qu'une page neuve ne prenne jamais un script de
 // la version d'avant dans un cache HTTP.
 // APP : tout fichier de l'application.
-const VERSION = 'carte-jeu';
+const VERSION = 'ob-pdf';
 const CACHE_APP = 'vaslweb-app-' + VERSION;
 // Nom fixe ; « -v1 » garde le cache des boards des versions d'avant.
 const CACHE_VASL = 'vaslweb-vasl-v1';
@@ -30,46 +31,46 @@ const APP = [
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
   './modeles/nouvelle-partie.vsav',
-  './pwa.js?v=carte-jeu',
-  './css/vaslweb.css?v=carte-jeu',
-  './js/outils.js?v=carte-jeu',
-  './js/donnees/ssr.js?v=carte-jeu',
-  './js/donnees/overlays-ext.js?v=carte-jeu',
-  './js/donnees/mouvement.js?v=carte-jeu',
-  './js/langue.js?v=carte-jeu',
-  './js/noyau.js?v=carte-jeu',
-  './js/fichiers.js?v=carte-jeu',
-  './js/carte.js?v=carte-jeu',
-  './js/hexagones.js?v=carte-jeu',
-  './js/los-moteur.js?v=carte-jeu',
-  './js/los-pions.js?v=carte-jeu',
-  './js/los-fil.js?v=carte-jeu',
-  './js/pieces.js?v=carte-jeu',
-  './js/pions.js?v=carte-jeu',
-  './js/boards.js?v=carte-jeu',
-  './js/vlog.js?v=carte-jeu',
-  './js/mf.js?v=carte-jeu',
-  './js/commandes.js?v=carte-jeu',
-  './js/chat-rapports.js?v=carte-jeu',
-  './js/flare.js?v=carte-jeu',
-  './js/cvp.js?v=carte-jeu',
-  './js/dissimulation.js?v=carte-jeu',
-  './js/tactile.js?v=carte-jeu',
-  './js/bdd.js?v=carte-jeu',
-  './js/qrdc.js?v=carte-jeu',
-  './js/oba.js?v=carte-jeu',
-  './js/des-utilisateurs.js?v=carte-jeu',
-  './js/des-3d.js?v=carte-jeu',
-  './js/ift.js?v=carte-jeu',
-  './js/reseau.js?v=carte-jeu',
-  './js/export.js?v=carte-jeu',
-  './js/preferences.js?v=carte-jeu',
-  './js/qc.js?v=carte-jeu',
-  './js/interface.js?v=carte-jeu',
-  './js/chat.js?v=carte-jeu',
-  './js/menus.js?v=carte-jeu'
+  './pwa.js?v=ob-pdf',
+  './css/vaslweb.css?v=ob-pdf',
+  './js/outils.js?v=ob-pdf',
+  './js/donnees/ssr.js?v=ob-pdf',
+  './js/donnees/overlays-ext.js?v=ob-pdf',
+  './js/donnees/mouvement.js?v=ob-pdf',
+  './js/langue.js?v=ob-pdf',
+  './js/noyau.js?v=ob-pdf',
+  './js/fichiers.js?v=ob-pdf',
+  './js/carte.js?v=ob-pdf',
+  './js/hexagones.js?v=ob-pdf',
+  './js/los-moteur.js?v=ob-pdf',
+  './js/los-pions.js?v=ob-pdf',
+  './js/los-fil.js?v=ob-pdf',
+  './js/pieces.js?v=ob-pdf',
+  './js/pions.js?v=ob-pdf',
+  './js/boards.js?v=ob-pdf',
+  './js/vlog.js?v=ob-pdf',
+  './js/mf.js?v=ob-pdf',
+  './js/commandes.js?v=ob-pdf',
+  './js/chat-rapports.js?v=ob-pdf',
+  './js/flare.js?v=ob-pdf',
+  './js/cvp.js?v=ob-pdf',
+  './js/dissimulation.js?v=ob-pdf',
+  './js/tactile.js?v=ob-pdf',
+  './js/bdd.js?v=ob-pdf',
+  './js/qrdc.js?v=ob-pdf',
+  './js/oba.js?v=ob-pdf',
+  './js/des-utilisateurs.js?v=ob-pdf',
+  './js/des-3d.js?v=ob-pdf',
+  './js/ift.js?v=ob-pdf',
+  './js/reseau.js?v=ob-pdf',
+  './js/export.js?v=ob-pdf',
+  './js/preferences.js?v=ob-pdf',
+  './js/qc.js?v=ob-pdf',
+  './js/interface.js?v=ob-pdf',
+  './js/chat.js?v=ob-pdf',
+  './js/menus.js?v=ob-pdf'
 ];
-const HOTES_VASL = ['raw.githubusercontent.com', 'unpkg.com'];
+const HOTES_VASL = ['raw.githubusercontent.com', 'unpkg.com', 'cdn.jsdelivr.net'];
 
 // À l'installation, les fichiers sont pris au serveur, jamais dans le cache
 // HTTP (10 minutes sur GitHub Pages) : sinon le cache d'une version neuve
