@@ -159,7 +159,7 @@ async function ouvrirPanneauOb(){
   w.className = 'fenetre fenOb';
   w.setAttribute('role', 'dialog');
   w.setAttribute('aria-label', 'OB du scénario');
-  w.innerHTML = `<div class="ft">OB du scénario<button type="button" class="obFermer" aria-label="Réduire" title="Réduire">–</button></div>
+  w.innerHTML = `<div class="ft">OB du scénario<span class="obBoutons"><button type="button" class="obFermer" data-ob="reduire" aria-label="Réduire" title="Réduire (le panneau se rouvre par le bouton « OB du scénario »)">–</button><button type="button" class="obFermer" data-ob="quitter" aria-label="Fermer" title="Fermer l’OB du scénario">×</button></span></div>
     <div class="fc"><div class="obEtat"><progress value="0" max="1"></progress><span></span>
       <button type="button" data-ob="arreter">Arrêter</button></div>
       <div class="obCorps"></div>
@@ -170,12 +170,26 @@ async function ouvrirPanneauOb(){
   w.addEventListener('pointerdown', e => e.stopPropagation());
   w.addEventListener('keydown', e => e.stopPropagation());
   _deplacableParTitre(w);
-  w.querySelector('.obFermer').onclick = () => _obReduire();
+  // Les boutons de la barre de titre ne la déplacent pas (sinon la capture
+  // du pointeur par le titre avale leur clic).
+  for(const b of w.querySelectorAll('.ft button')) b.addEventListener('pointerdown', e => e.stopPropagation());
+  w.querySelector('[data-ob="reduire"]').onclick = () => _obReduire();
+  w.querySelector('[data-ob="quitter"]').onclick = () => _obQuitter();
+  // Échap : comme les autres fenêtres
+  w.addEventListener('keydown', e => { if(e.key === 'Escape'){ e.preventDefault(); _obQuitter(); } });
   w.querySelector('[data-ob="arreter"]').onclick = () => { ob.arret = true; obOcr.arreter(); _obMajEtat(); };
   try { await chargerBDD(); } catch(e){}
   if(_ob !== ob) return;
   _obRendre();
   _obMajEtat();
+}
+// Fermer : la lecture s'arrête, le panneau disparaît. Les pions déjà posés
+// restent sur la carte ; une confirmation évite de perdre l'OB par mégarde.
+function _obQuitter(){
+  const ob = _ob;
+  if(!ob) return;
+  if(!confirm('Fermer l’OB du scénario ? Les pions déjà posés restent sur la carte ; pour le retrouver, il faudra relire le PDF.')) return;
+  obAbandonner();
 }
 // Réduit : un bouton flottant le rouvre (en tactile, la carte reste libre).
 function _obReduire(){
