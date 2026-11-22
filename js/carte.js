@@ -427,6 +427,96 @@ function chargerMotif(nom){
   return _motifs.get(nom);
 }
 
+// ═══ MISE À JOUR DES CARTES (roue ⚙) ═══
+// Le service worker garde les boards, les overlays et les motifs « cache
+// d'abord » (sw.js) : un board vu une fois n'est plus jamais redemandé,
+// même si VASL l'a mis à jour. Ici, chaque fichier du cache venu de
+// bdFiles/ (boards et overlays) ou de boardData/ (motifs ; les .xml y
+// sont déjà « réseau d'abord ») est redemandé avec cache: 'reload' :
+// sw.js prend alors le réseau et remplace l'entrée du cache. Ce que la
+// page a déjà chargé reste en mémoire : les boards neufs s'affichent au
+// prochain lancement de VASLweb.
+const CACHE_BOARDS_VASL = 'vaslweb-vasl-v1';    // CACHE_VASL de sw.js
+let _majCartesEnCours = false;
+
+const _carteDuCache = url => url.startsWith(VASL_BOARDS_URL)
+  || (url.startsWith(VASL_BOARDDATA_URL) && !/\.xml$/i.test(url.split('?')[0]));
+
+function _memesOctets(a, b){
+  if(a.byteLength !== b.byteLength) return false;
+  const x = new Uint8Array(a), y = new Uint8Array(b);
+  for(let i = 0; i < x.length; i++) if(x[i] !== y[i]) return false;
+  return true;
+}
+
+async function miseAJourCartes(){
+  if(_majCartesEnCours){ chatLog('⏳ Mise à jour des cartes déjà en cours'); return; }
+  if(!('caches' in window)){
+    alert(T('Pas de cache des cartes ici : les boards sont retéléchargés à chaque session.'));
+    return;
+  }
+  let cache, urls;
+  try {
+    cache = await caches.open(CACHE_BOARDS_VASL);
+    urls = (await cache.keys()).map(r => r.url).filter(_carteDuCache);
+  } catch(e){
+    chatLog('❌ Cache des cartes illisible : ' + (e && e.message ? e.message : e));
+    return;
+  }
+  if(!urls.length){
+    alert(T('Aucune carte en cache : elles seront téléchargées à leur première ouverture.'));
+    return;
+  }
+  if(!navigator.onLine){ alert(T('Mise à jour des cartes impossible hors ligne.')); return; }
+  if(!confirm(T(`Retélécharger les ${urls.length} fichier(s) de cartes gardés en cache (boards, overlays, motifs) ?`))) return;
+
+  _majCartesEnCours = true;
+  const nom = u => decodeURIComponent(u.split('?')[0].split('/').pop());
+  const changes = [], echecs = [];
+  // Sans service worker actif, la page range elle-même la réponse.
+  const range = !(navigator.serviceWorker && navigator.serviceWorker.controller);
+  let faits = 0, dernierPalier = 0;
+  chatLog(`🔄 Mise à jour des cartes : ${urls.length} fichier(s) à vérifier…`);
+  try {
+    await _runLimited(urls, async url => {
+      try {
+        const ancien = await cache.match(url);
+        const avant = ancien ? await ancien.arrayBuffer() : null;
+        const r = await fetch(url, {cache: 'reload'});
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        const neuf = await r.clone().arrayBuffer();
+        if(range) await cache.put(url, r);
+        if(!avant || !_memesOctets(avant, neuf)) changes.push(nom(url));
+      } catch(e){
+        echecs.push(nom(url) + ' (' + (e && e.message ? e.message : e) + ')');
+      } finally {
+        faits++;
+        const palier = Math.floor(faits * 4 / urls.length);
+        if(palier > dernierPalier && faits < urls.length){
+          dernierPalier = palier;
+          chatLog(`🔄 … ${faits} / ${urls.length}`);
+        }
+      }
+    }, 4);
+  } finally {
+    _majCartesEnCours = false;
+  }
+  changes.sort(); echecs.sort();
+  chatLog(changes.length
+    ? `✅ Cartes : ${changes.length} fichier(s) mis à jour sur ${urls.length} — ${changes.join(', ')}`
+    : `✅ Cartes : les ${urls.length - echecs.length} fichier(s) vérifiés sont à jour`);
+  if(echecs.length) chatLog(`⚠️ Cartes non vérifiées (${echecs.length}) : ${echecs.join(', ')}`);
+  if(!changes.length) return;
+  // Les boards déjà chargés restent en mémoire : un rechargement de la
+  // page les prend dans le cache neuf.
+  if(_source && _partieModifiee){
+    chatLog('ℹ️ Les cartes mises à jour s\'afficheront au prochain lancement de VASLweb (exporter la partie avant de recharger la page).');
+    return;
+  }
+  if(confirm(T('Des cartes ont été mises à jour. Recharger VASLweb maintenant pour les afficher ?'))) location.reload();
+  else chatLog('ℹ️ Les cartes mises à jour s\'afficheront au prochain lancement de VASLweb.');
+}
+
 // Pose les motifs sur l'image visible, comme Underlay.loadImage : le motif,
 // répété depuis le coin du canvas, n'apparaît que là où le board d'origine
 // (non repeint) porte l'une des couleurs de la règle. Ses pixels
