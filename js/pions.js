@@ -785,7 +785,10 @@ function _parseStacks(segs){
 }
 
 // La carte de jeu porte le nom par défaut de VASSAL ; à défaut, la plus
-// peuplée hors fenêtres auxiliaires (Casualties, Scenario Aid…).
+// peuplée hors fenêtres auxiliaires (Casualties, Scenario Aid…). Une
+// fenêtre auxiliaire n'est jamais la carte de jeu : sans autre carte
+// peuplée (partie neuve, carte encore vide), c'est « Main Map », et les
+// pièces des fenêtres restent à l'écart.
 function _carteDeJeu(infos){
   const tally = {};
   for(const d of infos) if(d.carte && d.carte !== 'null') tally[d.carte] = (tally[d.carte] || 0) + 1;
@@ -794,7 +797,7 @@ function _carteDeJeu(infos){
   if(std) return std;
   const AUX = /Casualties|Field Maintenance|Campaign Roster|Scenario Aid|Charts?|Reference|Dice|Roster|Aid Card/i;
   const jeu = noms.filter(n => !AUX.test(n));
-  return (jeu.length ? jeu : noms).sort((a, b) => tally[b] - tally[a])[0] || 'Main Map';
+  return jeu.sort((a, b) => tally[b] - tally[a])[0] || 'Main Map';
 }
 
 function importerPions(texte, label, annexes){
