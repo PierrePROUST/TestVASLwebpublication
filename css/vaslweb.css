@@ -827,3 +827,41 @@ body:not([data-terminal=pc]) .fenTerrain .teBoutons > *{flex:1}
 body:not([data-terminal=pc]) .fenTerrain .teBoutons button{min-height:44px}
 body:not([data-terminal=pc]) .fenTerrain .teListe{width:100%;min-height:44px}
 body:not([data-terminal=pc]) .fenTerrain select{min-height:44px;font-size:16px}
+
+/* ═══ OB du scénario (PDF de la fiche) — js/ob-panneau.js ═══ */
+.fenBoards .bpEtat.long{white-space:normal;max-height:4.5em;overflow:auto}
+.fenBoards .bpPdf{flex:none;width:180px;overflow:auto;align-self:flex-start;max-height:100%}
+.fenBoards .bpPdf canvas{display:block;width:100%;height:auto;border:1px solid var(--menu-bord);cursor:zoom-in;background:#fff}
+.fenBoards .bpPdf.grand{width:min(55vw,600px)}
+.fenBoards .bpPdf.grand canvas{cursor:zoom-out}
+body:not([data-terminal=pc]) .fenBoards .bpPdf{width:110px}
+.fenOb{width:min(96vw,560px);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;left:auto;right:12px;top:60px;transform:none}
+.fenOb .ft{cursor:move;user-select:none;touch-action:none;display:flex;align-items:center;justify-content:space-between}
+.fenOb .obFermer{background:none;border:none;color:#fff;font-size:18px;line-height:1;min-width:28px;cursor:pointer}
+.fenOb .fc{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1;overflow:hidden}
+.fenOb .obEtat{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--menu-doux)}
+.fenOb .obEtat progress{width:120px;flex:none}
+.fenOb .obEtat span{flex:1}
+.fenOb .obCorps{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.obGroupe{margin-bottom:10px}
+.obTitre select{width:100%;font-weight:700}
+.obListe{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.obCase{display:flex;align-items:center;gap:8px;padding:3px;border:1px solid var(--menu-bord);border-radius:4px;flex-wrap:wrap}
+.obCase .obTexte{flex:1;min-width:120px;font-size:13px}
+.obCase.identifie .obTexte{color:var(--menu-texte)}
+.obCase.ambigu,.obCase.illisible,.obCase.attente{border-style:dashed}
+.obCase.illisible .obTexte,.obCase.attente .obTexte{color:var(--menu-doux)}
+.obCase.epuise .vig,.obCase.epuise .obTexte{opacity:.4}
+.obScan{flex:none;width:52px;height:auto;image-rendering:auto;border:1px solid var(--menu-bord);background:#fff}
+.obChoix{display:flex;flex-wrap:wrap;gap:4px;width:100%}
+.obCand{display:flex;align-items:center;gap:4px;padding:2px 6px 2px 2px;font-size:12px}
+.obCand .mini{flex:none}
+.obRappel{position:fixed;right:12px;bottom:12px;z-index:9700;padding:8px 12px;border-radius:18px;
+  background:var(--menu-fond);color:var(--menu-texte);border:1px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.4)}
+body:not([data-terminal=pc]) .fenOb{left:0;right:0;top:0;width:100%;height:100%;max-height:none}
+.fenBoards .bpPdfNote{font-size:11px;color:var(--menu-doux);margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.obGroupe>summary{list-style:none;cursor:default}
+.obGroupe>summary::-webkit-details-marker{display:none}
+.obGroupe.vide>summary{cursor:pointer}
+.obGroupe.vide>summary::after{content:'aucun pion reconnu — ouvrir';display:block;font-size:11px;color:var(--menu-doux);margin-top:2px}
+.obGroupe.vide[open]>summary::after{content:'aucun pion reconnu'}

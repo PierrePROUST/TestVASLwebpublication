@@ -215,11 +215,13 @@ function ouvrirChoixBoards({nouvelle = false} = {}){
           <button type="button" data-bp="ligne">Add row</button>
           <button type="button" data-bp="colonne">Add column</button>
           <button type="button" data-bp="vider">Clear</button>
+          <button type="button" data-bp="pdf" title="Pré-remplir la grille et l’OB d’après le PDF de la fiche du scénario">Depuis un PDF…</button>
           <button type="button" data-bp="overlays">Add overlays</button>
           <button type="button" data-bp="rogner">Crop boards</button>
           <button type="button" data-bp="terrain">Terrain SSR</button>
         </div>
         <div class="bpDefile"><div class="bpGrille"></div></div>
+        <div class="bpPdf" hidden></div>
       </div>
       <div class="fb"><button type="button" class="prim" data-bp="ok">Ok</button><button type="button" data-bp="annuler">Cancel</button></div>
     </div>`;
@@ -239,6 +241,19 @@ function ouvrirChoixBoards({nouvelle = false} = {}){
   q('vider').onclick = () => { _bpReset(); _bpRendre(); };
   q('rogner').onclick = () => ouvrirRognage();
   q('overlays').onclick = () => ouvrirOverlays();
+  // Le choix du fichier se fait dans le geste du clic ; la lecture (modules
+  // chargés à la demande) vient ensuite.
+  q('pdf').onclick = () => {
+    const i = document.createElement('input');
+    i.type = 'file'; i.accept = 'application/pdf,.pdf';
+    i.onchange = () => {
+      const f = i.files && i.files[0];
+      if(!f) return;
+      _bpEtat('Chargement de la lecture des PDF…');
+      chargerModulesOb().then(() => obDepuisPdf(f)).catch(e => _bpEtat('⚠️ ' + e.message));
+    };
+    i.click();
+  };
   q('terrain').onclick = () => ouvrirTerrain();
   q('annuler').onclick = () => fermerChoixBoards();
   q('ok').onclick = () => validerChoixBoards();
@@ -256,6 +271,7 @@ function ouvrirChoixBoards({nouvelle = false} = {}){
 
 function fermerChoixBoards(){
   if(!_bp) return;
+  if(typeof obFermetureBoards === 'function') obFermetureBoards(!!_bp.valide);
   fermerRognage();
   fermerOverlays();
   fermerTerrain();
@@ -497,6 +513,7 @@ async function validerChoixBoards(){
   }
   if(!boards.length){ _bpEtat('No boards selected'); return; }
   const manque = _bp.nx * _bp.ny !== boards.length, releve = _bp.releve, nouvelle = _bp.nouvelle;
+  _bp.valide = true;
   fermerChoixBoards();
   if(manque){
     // Chatter.send : affiché, envoyé et consigné.
@@ -507,6 +524,8 @@ async function validerChoixBoards(){
   await appliquerBoards(boards, releve);
   // Partie neuve dans une salle : les autres joueurs reçoivent la carte faite.
   if(nouvelle && typeof netPartieChargee === 'function') netPartieChargee();
+  // OB lu dans le PDF d'un scénario : son panneau s'ouvre (js/ob-panneau.js).
+  if(typeof obApresBoards === 'function') obApresBoards();
 }
 
 // SetBoards exécutée ici seulement (ni M/, ni log, ni réseau), puis les
@@ -1062,15 +1081,14 @@ function _teCategorie(ed, nom, boite){
   ed.categories.set(nom, boite);
 }
 
-async function ouvrirTerrain(){
-  if(!_bp || _te || _rg || _ov) return;
-  const bp = _bp;
-  const boards = _bpBoardsControles();
+// L'éditeur des règles de terrain (sans fenêtre) : SSRControls du module,
+// les quatre transformations, puis les options de chaque board. Chaque
+// option garde le rang du board qui l'a apportée (o.rangBoard), pour les
+// overlays propres à un scénario (js/ob-panneau.js).
+async function _teEditeur(boards, surErreur){
   const ed = {sources: new Set(), cibles: new Map(), base: [], basics: [], groupe: [], categories: new Map(), profondeur: 0};
-  _bpEtat('Working ...');
   let texte = '';
-  try { texte = await texteSSRControls(); } catch(e){ _bpEtat('⚠️ ' + e.message); }
-  if(_bp !== bp || _te) return;
+  try { texte = await texteSSRControls(); } catch(e){ if(surErreur) surErreur(e); }
   _teLireOptions(ed, texte);
   // setup : les quatre transformations, puis les options de chaque board.
   const transfo = document.createElement('div');
@@ -1078,17 +1096,28 @@ async function ouvrirTerrain(){
   for(let i = 0; i < 4; i++){ const o = _optionTransformation(); transfo.appendChild(o.el); ed.groupe.push(o); }
   _teCategorie(ed, 'Transformations', transfo);
   let versions = '', n = 0;
-  for(const b of boards){
+  for(const [rang, b] of boards.entries()){
     const g = await chargerGeoBoard(b.name);
     if(g.defaut) continue;
     try {
       const files = await _archive(b.name);
       const ctl = _fichier(files, 'SSRControls');
+      const avant = ed.groupe.length;
       if(ctl) _teLireOptions(ed, new TextDecoder().decode(ctl));
+      for(const o of ed.groupe.slice(avant)) o.rangBoard = rang;
     } catch(e){}
     n++;
     versions += `${g.nomBoard} (ver ${g.version}) `;
   }
+  return {ed, n, versions};
+}
+
+async function ouvrirTerrain(){
+  if(!_bp || _te || _rg || _ov) return;
+  const bp = _bp;
+  const boards = _bpBoardsControles();
+  _bpEtat('Working ...');
+  const {ed, n, versions} = await _teEditeur(boards, e => _bpEtat('⚠️ ' + e.message));
   if(_bp !== bp || _te) return;
   _bpEtat('');
   const voile = document.createElement('div');
@@ -1177,6 +1206,38 @@ async function ouvrirTerrain(){
     etat('Back to normal');
   };
 }
+// « Apply » du dialogue Terrain pour un seul board (le rang-ième de la
+// grille), avec les options ed.groupe dans leur état : ce que fait le
+// joueur qui choisit le board, coche, puis Apply.
+function _teAppliquerAuBoard(ed, rang){
+  const regles = _teReglesOptions(ed), base = ed.base.map(o => o.regle()).join('');
+  const c = _bpCaseDuRang(rang);
+  c.terrain = c.terrain + '\t' + regles;
+  if(c.board) _bpTerrain(c, base + c.terrain);
+  _teReset(ed, false);
+}
+
+// ── Lecture du PDF d'un scénario (js/ob-*.js) : chargée à la demande, au
+// premier clic sur « Depuis un PDF… », avec la version de l'application.
+const OB_MODULES = ['js/ob-image.js', 'js/ob-pdf.js', 'js/ob-ocr.js', 'js/donnees/ob-reference.js',
+  'js/ob-lecture.js', 'js/ob-carte.js', 'js/ob-panneau.js'];
+let _obModules = null;
+function chargerModulesOb(){
+  if(!_obModules){
+    const s0 = [...document.scripts].find(s => /js\/boards\.js/.test(s.src));
+    const v = s0 && /\?v=[^&]+/.exec(s0.src);
+    _obModules = OB_MODULES.reduce((p, f) => p.then(() => new Promise((ok, ko) => {
+      const s = document.createElement('script');
+      s.src = f + (v ? v[0] : '');
+      s.onload = ok;
+      s.onerror = () => ko(new Error(f + ' introuvable'));
+      document.head.appendChild(s);
+    })), Promise.resolve());
+    _obModules.catch(() => { _obModules = null; });
+  }
+  return _obModules;
+}
+
 function fermerTerrain(){
   if(!_te) return;
   _te.w.remove(); _te.voile.remove();
