@@ -579,6 +579,12 @@ body:not([data-terminal=pc]) .lig .mini{width:56px;height:56px}
 body:not([data-terminal=pc]) .lig button{min-width:var(--cible);min-height:var(--cible)}
 .lig button{padding:1px 6px;font-size:12px}
 .lig button.poigneeRang{cursor:grab;touch-action:none}
+.ajoutCarteAutre{padding:6px 8px 8px;border-bottom:6px solid #262626}
+.ajoutCarteAutre .tt{font-size:13px;color:var(--menu-doux);margin:0 0 4px}
+.ajoutCarteUrl{display:block;box-sizing:border-box;width:100%;padding:8px;font-size:16px;
+  background:#2a2a2a;color:var(--texte);border:1px solid var(--bord);border-radius:4px}
+.ajoutCarteBoutons{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.ajoutCarteBoutons .act{flex:1;min-width:140px}
 #ajoutCarteRech{display:block;box-sizing:border-box;width:calc(100% - 16px);margin:4px 8px 6px;padding:8px;font-size:16px;
   background:#2a2a2a;color:var(--texte);border:1px solid var(--bord);border-radius:4px}
 #palRech{margin:6px 8px;padding:5px;background:#2a2a2a;color:var(--texte);border:1px solid var(--bord);border-radius:4px}
