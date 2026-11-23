@@ -571,17 +571,36 @@ function _nomDeSource(s){
   return f.replace(/\.(zip|bd)$/i, '').replace(/^bd/i, '').trim();
 }
 
-// Vérifie l'archive et la range sous l'adresse VASL du board.
-async function _garderArchive(octets, nom, source){
+// Le nom du board est celui que porte l'archive, jamais celui du fichier
+// (« bdHT_bordure » contient le board HT) : c'est sous ce nom que les
+// parties le demandent (« bd » + nom dans bdFiles/). Comme
+// chargerGeoBoard, on le lit dans l'image déclarée par BoardMetadata.xml
+// (boardImageFileName « bdHT.gif » → HT), sinon dans son attribut name,
+// sinon dans la seule image bd*.gif de l'archive ; le nom du fichier ne
+// sert qu'en dernier recours.
+async function _lireArchiveBoard(octets, source){
   const files = await _zipRead(octets);
-  let image = null;
+  let image = null, nomMeta = null;
   const xml = _fichier(files, 'BoardMetadata.xml');
   if(xml){
-    const m = /boardImageFileName\s*=\s*"([^"]+)"/.exec(new TextDecoder().decode(xml));
-    if(m) image = m[1];
+    const doc = new DOMParser().parseFromString(new TextDecoder().decode(xml), 'application/xml');
+    const r = doc.documentElement;
+    if(r && r.nodeName === 'boardMetadata'){
+      image = r.getAttribute('boardImageFileName');
+      nomMeta = (r.getAttribute('name') || '').trim() || null;
+    }
   }
+  const gifs = [...files.keys()].filter(n => /^bd.+\.gif$/i.test(n) && !n.includes('/'));
+  const deImage = n => { const m = /^bd(.+?)\.gif$/i.exec(n || ''); return m ? m[1] : null; };
+  const nom = deImage(image) || nomMeta || (gifs.length === 1 ? deImage(gifs[0]) : null) || _nomDeSource(source);
+  if(!nom || !/^[^\s\/\\?#]+$/.test(nom)) throw new Error(T('nom de board illisible dans l\'archive'));
   if(!_gifDuBoard(files, nom, image))
     throw new Error(T('pas un board VASL : image') + ' ' + (image || 'bd' + nom + '.gif') + ' ' + T('absente de l\'archive'));
+  return {files, nom};
+}
+
+// Range l'archive sous l'adresse VASL du board.
+async function _garderArchive(octets, files, nom, source){
   if('caches' in window) await (await caches.open(CACHE_BOARDS_VASL)).put(_urlBoard(nom), _reponseCarte(octets, source));
   // Ce que la page avait déjà chargé de ce nom est oublié ; l'archive neuve
   // reste en mémoire pour la session (indispensable sans cache).
@@ -589,7 +608,6 @@ async function _garderArchive(octets, nom, source){
   _geoBoards.delete(nom);
   const u = _boardCache.get(nom);
   if(u){ URL.revokeObjectURL(u); _boardCache.delete(nom); }
-  return files;
 }
 
 async function ajouterCarteAuCache(){
@@ -628,26 +646,20 @@ async function ajouterCarteAuCache(){
   if(!('caches' in window))
     chatLog('ℹ️ ' + T('Pas de cache des cartes ici : le board ajouté ne sera gardé que pour cette session.'));
 
-  // Le nom sous lequel le board sera rangé : celui que demandent les
-  // parties (« bd » + nom dans bdFiles/). Il est proposé d'après la source.
-  const demanderNom = source => {
-    const n = prompt(T('Nom du board (celui des parties qui l\'utilisent, sans « bd ») :'), _nomDeSource(source));
-    if(n === null) return null;
-    const nom = n.trim().replace(/^bd/i, '');
-    if(!/^[^\s\/\\?#]+$/.test(nom)){ alert(T('Nom de board invalide (ni espace, ni / \\ ? #).')); return null; }
-    if(enCache.has(nom) && !confirm(T(`Le board ${nom} est déjà en cache. Le remplacer ?`))) return null;
-    if(!enCache.has(nom) && boards.some(b => b.nom === nom)
-       && !confirm(T(`${nom} est un board VASL : la version choisie le remplacera sur cet appareil. Continuer ?`))) return null;
-    return nom;
-  };
+  // Une seule question, et seulement si le board remplace quelque chose.
+  const remplacer = nom => !(enCache.has(nom) || boards.some(b => b.nom === nom))
+    || confirm(T(enCache.has(nom) ? `Le board ${nom} est déjà en cache. Le remplacer ?`
+                 : `${nom} est un board VASL : la version choisie le remplacera sur cet appareil. Continuer ?`));
   const occupe = v => { btDl.disabled = btFichier.disabled = champUrl.disabled = v; };
   const garderDepuis = async (source, lire) => {
-    const nom = demanderNom(source);
-    if(!nom) return;
     occupe(true);
+    let nom = _nomDeSource(source);
     try {
       const octets = await lire();
-      await _garderArchive(octets, nom, source);
+      const a = await _lireArchiveBoard(octets, source);
+      nom = a.nom;
+      if(!remplacer(nom)) return;
+      await _garderArchive(octets, a.files, nom, source);
       enCache.set(nom, source);
       chatLog(`💾 Board ${nom} gardé pour le hors-ligne depuis ${source} (${(octets.byteLength / 1048576).toFixed(1)} Mo)`);
       champUrl.value = '';
