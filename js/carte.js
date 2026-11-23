@@ -517,6 +517,105 @@ async function miseAJourCartes(){
   else chatLog('ℹ️ Les cartes mises à jour s\'afficheront au prochain lancement de VASLweb.');
 }
 
+// ═══ AJOUTER UNE CARTE AU CACHE (roue ⚙) ═══
+// Un board n'entre dans le cache qu'à son premier affichage. Ici, on le
+// choisit dans la liste VASL (v5boardVersions.xml, comme « Pick new
+// boards ») — HASL, Deluxe, geomorphique… — et son archive bdXX est
+// téléchargée pour le hors-ligne, sans ouvrir de partie. sw.js la range
+// (cache d'abord) ; sans service worker actif, la page la range elle-même.
+// Les motifs et les overlays du scénario viendront, eux, au premier usage.
+const _urlBoard = nom => VASL_BOARDS_URL + 'bd' + nom;
+
+async function _boardsEnCache(){
+  try {
+    const cache = await caches.open(CACHE_BOARDS_VASL);
+    return new Set((await cache.keys()).map(r => r.url.split('?')[0])
+      .filter(u => u.startsWith(VASL_BOARDS_URL))
+      .map(u => decodeURIComponent(u.substring(VASL_BOARDS_URL.length)))
+      .filter(f => f.startsWith('bd') && !f.includes('/'))       // pas overlays/
+      .map(f => f.substring(2)));
+  } catch(e){ return new Set(); }
+}
+
+async function ajouterCarteAuCache(){
+  if(!('caches' in window)){
+    alert(T('Pas de cache des cartes ici : les boards sont retéléchargés à chaque session.'));
+    return;
+  }
+  const f = ouvrirFeuille({id: 'feuilleAjoutCarte', titre: T('Ajouter une carte au cache'), hauteur: 'moitie'});
+  const rech = document.createElement('input');
+  rech.type = 'search'; rech.id = 'ajoutCarteRech'; rech.autocomplete = 'off'; rech.spellcheck = false;
+  rech.placeholder = T('Rechercher un board (RB, VotG, 23a…)');
+  rech.setAttribute('aria-label', rech.placeholder);
+  const liste = document.createElement('div');
+  f.corps.append(rech, liste);
+  const vide = t => { const d = document.createElement('div'); d.className = 'videFeuille'; d.textContent = t; liste.replaceChildren(d); };
+  vide(T('Chargement de la liste des boards…'));
+
+  let boards, enCache;
+  try {
+    // Un nom par board (le libellé « New » / « Updated » double l'entrée).
+    const vus = new Map();
+    for(const lib of await listeBoards()){
+      const nom = nomDuLibelle(lib);
+      if(!vus.has(nom)) vus.set(nom, lib.split(/\s{2,}/).slice(1).join(' · '));
+    }
+    boards = [...vus].map(([nom, type]) => ({nom, type}));
+    enCache = await _boardsEnCache();
+  } catch(e){
+    vide(T('Liste des boards indisponible (hors ligne ?).'));
+    return;
+  }
+  if(!_feuilles.has('feuilleAjoutCarte')) return;
+
+  const enCours = new Set();
+  const garder = async (b, bt) => {
+    if(enCours.has(b.nom)) return;
+    if(!navigator.onLine){ alert(T('Ajout au cache impossible hors ligne.')); return; }
+    enCours.add(b.nom);
+    bt.disabled = true;
+    bt.querySelector('.rc').textContent = '⏳';
+    try {
+      const url = _urlBoard(b.nom);
+      const r = await fetch(url);
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      const range = !(navigator.serviceWorker && navigator.serviceWorker.controller);
+      if(range) await (await caches.open(CACHE_BOARDS_VASL)).put(url, r.clone());
+      const n = (await r.arrayBuffer()).byteLength;
+      enCache.add(b.nom);
+      chatLog(`💾 Board ${b.nom} gardé pour le hors-ligne (${(n / 1048576).toFixed(1)} Mo)`);
+    } catch(e){
+      chatLog(`❌ Board ${b.nom} non gardé : ${e && e.message ? e.message : e}`);
+    } finally {
+      enCours.delete(b.nom);
+      if(bt.isConnected){ bt.disabled = false; peindre(); }
+    }
+  };
+  const peindre = () => {
+    const q = rech.value.trim().toLowerCase();
+    const l = q ? boards.filter(b => (b.nom + ' ' + b.type).toLowerCase().includes(q)) : boards;
+    if(!l.length){ vide(T('Aucun board ne correspond.')); return; }
+    const frag = document.createDocumentFragment();
+    for(const b of l){
+      const bt = document.createElement('button');
+      bt.type = 'button'; bt.className = 'act ligne';
+      bt.innerHTML = '<span class="ic"></span><span class="lb"></span><span class="rc"></span>';
+      const garde = enCache.has(b.nom);
+      bt.querySelector('.ic').textContent = garde ? '✓' : '🗺️';
+      bt.querySelector('.lb').textContent = b.nom;
+      bt.querySelector('.rc').textContent = enCours.has(b.nom) ? '⏳' : garde ? T('en cache') : b.type;
+      bt.disabled = garde || enCours.has(b.nom);
+      bt.title = garde ? T('Déjà gardé pour le hors-ligne') : T('Télécharger ce board pour le hors-ligne');
+      bt.addEventListener('click', () => garder(b, bt));
+      frag.appendChild(bt);
+    }
+    liste.replaceChildren(frag);
+  };
+  rech.addEventListener('input', peindre);
+  peindre();
+  if(_profil === 'pc') rech.focus();
+}
+
 // Pose les motifs sur l'image visible, comme Underlay.loadImage : le motif,
 // répété depuis le coin du canvas, n'apparaît que là où le board d'origine
 // (non repeint) porte l'une des couleurs de la règle. Ses pixels

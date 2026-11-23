@@ -163,6 +163,9 @@ const ACTIONS = {
   // Retélécharger les boards, overlays et motifs gardés en cache (carte.js).
   majCartes:{lib: 'Mise à jour des cartes (boards en cache)', court: 'Cartes', ico: '🗺️',
              faire: () => miseAJourCartes()},
+  // Garder un board choisi pour le hors-ligne, sans ouvrir de partie (carte.js).
+  ajoutCarte:{lib: 'Ajouter une carte au cache…', court: 'Ajout carte', ico: '💾',
+             faire: () => ajouterCarteAuCache()},
   prefLOS:  {lib: 'Préférences de la LOS (couleurs)…', court: 'Préférences', ico: '⚙', faire: () => ouvrirPreferences('los')},
   zoomMoins:{lib: 'Zoom arrière', ico: '−', faire: zoomOut},
   zoomPlus: {lib: 'Zoom avant', ico: '+', faire: zoomIn},
@@ -481,7 +484,7 @@ const DISPOSITIONS = {
 // Réglages de la roue ⚙ du PC : ce que les menus étaient seuls à offrir
 // et qui n'a pas sa place dans la barre d'icônes.
 const CONFIG_PC = ['preferences', 'prefLOS', 'verbeux', '-', 'couche_unite', 'couche_marqueur', 'couche_overlay', '-',
-  'chatHaut', 'des3d', '-', 'profil_auto', 'profil_pc', 'profil_tactile', '-', 'miseAJour', 'majCartes'];
+  'chatHaut', 'des3d', '-', 'profil_auto', 'profil_pc', 'profil_tactile', '-', 'miseAJour', 'majCartes', 'ajoutCarte'];
 function basculerConfig(){
   if(_feuilles.has('feuilleConfig')){ fermerFeuille('feuilleConfig'); return; }
   const f = ouvrirFeuilleActions('Configuration', _telLike() ? CONFIG_TACTILE : CONFIG_PC, 'feuilleConfig');
@@ -701,7 +704,7 @@ const RAIL_TACTILE = ['ouvrir', 'nouvelle', 'vsav', 'log', 'los', 'losMuet', 'un
 // LOS, décompte), identification, partie à distance, dés 3D, côté de la
 // colonne, affichage ordinateur, mise à jour.
 const CONFIG_TACTILE = ['preferences', 'verbeux', '-', 'utilisateur', 'reseau', '-',
-  'des3d', 'coteColonne', '-', 'profil_pc', '-', 'miseAJour', 'majCartes'];
+  'des3d', 'coteColonne', '-', 'profil_pc', '-', 'miseAJour', 'majCartes', 'ajoutCarte'];
 
 // SAN et pièges : les champs eux-mêmes viennent dans la feuille, et
 // retournent à l'onglet Dés quand elle se ferme.
