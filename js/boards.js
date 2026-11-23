@@ -261,7 +261,13 @@ function ouvrirChoixBoards({nouvelle = false} = {}){
   // nouvelle partie, reset() seul.
   _bpPoserBoards(nouvelle ? [] : _losBoards.map(b => Object.assign(_copieBoard(b), {col: b.col, row: b.row})));
   _bpRendre();
-  listeBoards().then(l => {
+  // Les boards ajoutés d'un autre emplacement (roue ⚙, carte.js) suivent
+  // ceux du dépôt VASL.
+  listeBoards().then(async l => {
+    const perso = [...(await boardsEnCache())].filter(([nom, s]) => s && !l.some(x => nomDuLibelle(x) === nom))
+      .map(([nom]) => nom + '  Perso').sort();
+    return l.concat(perso);
+  }).then(l => {
     if(_bp && _bp.w === w){ _bp.liste = l; for(const c of _bp.cases) _bpRemplirListe(c, c.rech.value); }
   }).catch(e => {
     if(_bp && _bp.w === w){ _bp.liste = []; _bpEtat('⚠️ ' + e.message); for(const c of _bp.cases) _bpRemplirListe(c, c.rech.value); }
