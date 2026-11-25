@@ -701,10 +701,10 @@ function placerColonne(c){
 const RAIL_TACTILE = ['ouvrir', 'nouvelle', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables',
   'oba', 'bin', 'couche_overlay', 'rotDroite', 'rot180', 'sanPieges'];
 // Réglages de la roue ⚙ en affichage tactile : préférences (utilisateur,
-// LOS, décompte), identification, partie à distance, dés 3D, côté de la
-// colonne, affichage ordinateur, mise à jour.
+// LOS, décompte), identification, partie à distance, dés 3D, affichage
+// ordinateur, mise à jour. Le côté de la colonne (⇄) est dans la colonne.
 const CONFIG_TACTILE = ['preferences', 'verbeux', '-', 'utilisateur', 'reseau', '-',
-  'des3d', 'coteColonne', '-', 'profil_pc', '-', 'miseAJour', 'majCartes', 'ajoutCarte'];
+  'des3d', '-', 'profil_pc', '-', 'miseAJour', 'majCartes', 'ajoutCarte'];
 
 // SAN et pièges : les champs eux-mêmes viennent dans la feuille, et
 // retournent à l'onglet Dés quand elle se ferme.
@@ -747,13 +747,13 @@ DISPOSITIONS.tactile = {
     // Une colonne d'icônes sur la droite de l'écran : carte ; affichage de
     // la carte avec ou sans pions ; palette ; Remove all ; journal ; Undo ;
     // les dés (DR, IFT, TH, TK, MC, Rally, CC, TC, dr, SA, RS) ; puis les
-    // actions de RAIL_TACTILE, ⏭ (fin du log) juste sous Unmoved ; la roue
-    // ⚙ de configuration ; tout en bas, ◀, la position et ▶. ⏭, ◀ et ▶ ne
+    // actions de RAIL_TACTILE, ⏭ (fin du log) juste sous Unmoved ; ⇄ pour
+    // passer la colonne de droite à gauche ; la roue ⚙ de configuration ; tout en bas, ◀, la position et ▶. ⏭, ◀ et ▶ ne
     // sont présents que pendant une relecture.
     const premieres = ['vueCarte', 'masquer', 'vuePions', 'all', 'vueJournal', 'undo', ...DES.map(d => d.id)];
     const ids = [...premieres, ...RAIL_TACTILE.filter(x => !premieres.includes(x))
                    .flatMap(x => x === 'unmoved' ? [x, 'relectureFin'] : [x]),
-                 'config', 'relectureRail'];
+                 'coteColonne', 'config', 'relectureRail'];
     // Défilement sans fin : la liste est posée trois fois ; près d'un bout,
     // on saute d'une longueur de liste sans que rien ne bouge à l'écran.
     // Monter au-delà de la première icône mène à la dernière, et l'inverse.
