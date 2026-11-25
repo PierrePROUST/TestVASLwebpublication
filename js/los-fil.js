@@ -140,6 +140,7 @@ function _pionsDuFil(map){
 function armerFil(mode){
   if(_filArme){ desarmerFil(); return; }
   if(!_losBoards){ chatLog('ℹ️ Ouvrir une partie avant de tracer une ligne de vue'); return; }
+  if(_fil && _fil.distant) _effacerFil();
   _filArme = mode;
   rafraichirActions(['los', 'losMuet']);
   document.getElementById('mapWrap').classList.add('visee');
@@ -677,8 +678,13 @@ function _calqueFil(){
   s.setAttribute('width', _mapW); s.setAttribute('height', _mapH);
   return s;
 }
+// Un fil déjà montré aux autres joueurs (envoye) s'y efface aussi :
+// abandonné par ✕, Échap, l'icône LOS ou un pincement, il y resterait
+// sinon affiché jusqu'à ce qu'ils arment eux-mêmes la LOS.
 function _effacerFil(){
+  const f = _fil;
   _fil = null;
+  if(f && f.envoye) _envoyerFil(f, false, false);
   _fermerPanneauFil();
   const s = document.getElementById('filLOS');
   if(s) s.remove();
@@ -779,6 +785,7 @@ function terminerFil(f){
   if(f.envoye){
     if(consigne) _nouvelleAction();
     _envoyerFil(f, false, false, consigne);
+    f.envoye = false;               // effacement déjà envoyé
   }
   if(verifie) _fenetreResultatLOS(f, portee);
   desarmerFil();
@@ -944,7 +951,8 @@ function _brancherFil(){
       return;
     }
     if(_fil && _fil.ancre && !_fil.distant){ e.preventDefault(); e.stopPropagation(); deplacerBoutFil(e); return; }
-    if(_fil) return;
+    if(_fil && !_fil.distant) return;
+    if(_fil) _effacerFil();           // fil d'un autre joueur : remplacé
     e.preventDefault(); e.stopPropagation();
     commencerFil(e);
   }, true);
