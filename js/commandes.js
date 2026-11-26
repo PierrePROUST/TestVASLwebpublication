@@ -329,6 +329,14 @@ function commandesDe(type){
       const chemin = f[3] || '';
       const placement = parseInt(f[11], 10) || 0;
       const apres = lireTouche(f[8]);
+      // Replace « match rotation » (champ 7) : la nouvelle pièce reprend
+      // l'état des traits identiques de l'ancienne (Replace.matchTraits) —
+      // le niveau de bâtiment d'un marqueur de contrôle qui change de camp,
+      // l'orientation d'un périmètre qui gagne un côté. « above » (champ
+      // 12) : seuls comptent les traits intérieurs au Replace ; champ 13 :
+      // les DynamicProperty se reconnaissent à leur seul nom.
+      const reprise = id === 'replace' && f[7] === 'true'
+        ? {debut: f[12] === 'true' ? i + 1 : 0, parNom: f[13] === 'true'} : null;
       const acq = id === 'placeACQ' || /(^|[^a-z])ACQ($|[^a-z])/i.test(ch[1] || '');
       ajouter(i, ch[1], lireTouche(ch[2]), ({p, S, effets}) => {
         // PlaceDM ne pose rien sur une pièce dont le nom intérieur contient
@@ -344,7 +352,7 @@ function commandesDe(type){
             const s = pile(cle(p));
             if(s.slice(s.indexOf(p) + 1).some(q => q.nom === 'DM')) return;
           }
-          const q = placerMarqueur(p, chemin, placement);
+          const q = placerMarqueur(p, chemin, placement, reprise);
           if(q && apres) executerTouche(q, apres);
           // L'ACQ d'un véhicule ou d'un canon lui est liée, comme par
           // Ctrl+Alt+L. La plupart la posent par un PlaceMarker « + ACQ ».

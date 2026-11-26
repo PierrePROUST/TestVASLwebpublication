@@ -110,7 +110,7 @@ function _slotDuChemin(chemin){
 // markerSpec : un chemin vers un PieceSlot, ou une définition « +/… »
 // autonome (isMarkerStandalone). Le gpId du trait est celui du marqueur
 // créé, pas celui d'un PieceSlot : il ne sert pas à le retrouver.
-function placerMarqueur(p, spec, placement){
+function placerMarqueur(p, spec, placement, reprise){
   if(!_bdd){ chatLog('⚠️ Base VASL pas encore chargée'); return null; }
   let def = null, nom = null;
   if(/^\+\\?\//.test(spec)){
@@ -129,9 +129,32 @@ function placerMarqueur(p, spec, placement){
     nom = x && x.n;
   }
   if(!def){ chatLog(`⚠️ ${p.nom} : pion à poser introuvable`); return null; }
+  if(reprise){
+    const te = _typeEtEtat(p.seg);
+    if(te) _reprendreEtats(decoderTraits(te.type), decoderTraits(te.etat), def.T, def.S, reprise);
+  }
   const q = poserTraits(def.T, def.S, p.x, p.y, p, placement);
   chatLog(`➕ ${nom} posé sur ${p.nom}`);
   return q;
+}
+
+// Replace.matchTraits de VASSAL : chaque trait de la nouvelle pièce (sauf
+// les Marker et le BasicPiece) prend l'état du premier trait de l'ancienne,
+// à partir du rang `debut`, qui a exactement le même type ; une
+// DynamicProperty, avec `parNom`, celui de la propriété de même nom.
+function _reprendreEtats(T0, S0, T, S, {debut = 0, parNom = false} = {}){
+  const id = t => t.split(';')[0];
+  const nomProp = t => (t.split(';')[1] || '').replace(/\\(.)/g, '$1');
+  for(let j = 0; j < T.length - 1; j++){
+    if(id(T[j]) === 'mark') continue;
+    for(let i = debut; i < T0.length - 1; i++){
+      if(id(T0[i]) !== id(T[j])) continue;
+      if(T0[i] === T[j] || (parNom && id(T[j]) === 'PROP' && nomProp(T0[i]) === nomProp(T[j]))){
+        S[j] = S0[i];
+        break;
+      }
+    }
+  }
 }
 
 // La pièce part sur une autre fenêtre de VASL (Casualties…) : elle quitte

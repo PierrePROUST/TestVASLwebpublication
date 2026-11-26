@@ -1576,10 +1576,15 @@ function poserDepuisPalette(x, cx, cy){
   const def = developperDefinition(x.cmd);
   if(!def){ chatLog(`⚠️ ${x.n} : définition VASSAL illisible`); return; }
   if(surTables(cx, cy)){ chatLog('⛔ Pas de pion sur les tables QRDC : rien posé'); return; }
-  const pos = positionDepot(cx, cy);
+  const im = _immobilise({typ: def.T});
+  const pos = im && im.libre ? pointLibre(cx, cy) : positionDepot(cx, cy);
   const p = poserTraits(def.T, def.S, pos.x, pos.y, null, 0);
   selectionnerPile(cle(p));
   if(!p.cache) rapport(_remplir(FORMAT_CREATION, {pieceName: nomRapport(p), location: lieu(p.x, p.y), mapName: _carteJeu}));
+  // Comme PieceMover.movePieces, la pièce lâchée depuis la palette reçoit
+  // la touche de mouvement de la carte : le marqueur de zone de Hideable
+  // Control Markers s'y remplace par sa zone (Perimeter_area_…).
+  executerTouche(p, TOUCHE_MOUVEMENT);
   // Case de l'OB d'un scénario (js/ob-panneau.js) : son compteur baisse.
   if(x.apresPose) x.apresPose(p);
   return p;

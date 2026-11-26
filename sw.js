@@ -6,7 +6,8 @@
 // Les ressources VASL (raw.githubusercontent.com), PeerJS (unpkg) et les
 // bibliothèques de lecture des PDF de scénario (cdn.jsdelivr.net, versions
 // fixées) : gardées au fil des parties, pour rejouer hors ligne les boards
-// déjà vus. Les métadonnées XML et le buildFile changent avec VASL : réseau
+// déjà vus. Les métadonnées XML, le buildFile et les extensions (.vmdx,
+// js/extensions.js) changent avec VASL : réseau
 // d'abord ; les boards, overlays et images : cache d'abord.
 // ═══════════════════════════════════════════════════════════════
 // VERSION change à chaque publication : le cache de la version précédente
@@ -56,6 +57,7 @@ const APP = [
   './js/cvp.js?v=icones-flare',
   './js/dissimulation.js?v=icones-flare',
   './js/tactile.js?v=icones-flare',
+  './js/extensions.js?v=icones-flare',
   './js/bdd.js?v=icones-flare',
   './js/qrdc.js?v=icones-flare',
   './js/oba.js?v=icones-flare',
@@ -149,7 +151,7 @@ self.addEventListener('fetch', e => {
     // avec cache: 'reload' ; il est pris au réseau et remplace celui du
     // cache. Pas de repli sur le cache : un échec doit se voir.
     if(req.cache === 'reload'){ e.respondWith(rafraichir(req, CACHE_VASL)); return; }
-    const variable = /\.xml$|\/buildFile$/i.test(url.pathname);
+    const variable = /\.xml$|\/buildFile$|\.vmdx$/i.test(url.pathname);
     e.respondWith(variable ? reseauDabord(req, CACHE_VASL) : cacheDabord(req, CACHE_VASL));
   }
 });

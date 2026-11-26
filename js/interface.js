@@ -239,6 +239,140 @@ const ACTIONS = {
              actif: () => _logPos < _etapes.length},
   lgFin:    {lib: 'Fin du log', ico: '⏭', faire: () => allerLog(_etapes.length), actif: () => _logPos < _etapes.length}
 };
+
+// ═══ HIDEABLE CONTROL MARKERS — BOUTONS DE LA CARTE ═══
+// Les boutons que l'extension ajoute à la barre de la carte de VASL :
+// DCMenus (les marqueurs à poser : ici, la palette ouverte sur leur
+// onglet), LayerControlHCSwap (montrer / masquer les couches Control et
+// Perimeter), LayerControlHCCycle (couche du dessus, tour à tour) et le
+// menu de sélection (ToolbarMenu) : tous les marqueurs de contrôle, de
+// périmètre, ou ceux d'une nation, d'une couleur — chaque choix s'ajoute à
+// la sélection (GlobalKeyCommandSelect, MassKeyCommandSelect). Les icônes
+// sont celles de l'extension. Absents tant que l'extension n'est pas lue.
+const _outilsHC = () => (_bdd && _bdd.outilsCarte) || null;
+Object.assign(ACTIONS, {
+  hcPoser: {lib: 'Poser un marqueur de contrôle ou de périmètre (palette)', court: 'Contrôle',
+            img: () => (_outilsHC() && _outilsHC().poser && _outilsHC().poser.icone) || 'multi_menu.png',
+            visible: () => !!(_outilsHC() && _outilsHC().poser), faire: () => ouvrirPaletteSur('Hideable Control')},
+  hcVoir:  {lib: () => calquesHCMasques() ? 'Montrer les marqueurs de contrôle et de périmètre'
+                                          : 'Masquer les marqueurs de contrôle et de périmètre',
+            court: 'Contrôle', img: () => calquesHCMasques() ? 'HC/building.png' : 'HC/control_on.png',
+            allume: calquesHCMasques, visible: () => !!controleCalques('Switch'),
+            faire: () => commanderCalques(controleCalques('Switch'))},
+  hcCycle: {lib: 'Couche du dessus, tour à tour : pions, contrôle, périmètre', court: 'Couches',
+            img: () => ({Control: 'HC/control_cycle2.png', Perimeter: 'HC/control_cycle3.png'})[calqueDuDessus()] || 'HC/control_cycle1.png',
+            allume: () => !!calqueDuDessus(), visible: () => !!controleCalques('Rotate'),
+            faire: () => commanderCalques(controleCalques('Rotate'))},
+  hcSel:   {lib: 'Sélectionner des marqueurs de contrôle ou de périmètre…', court: 'Sélection',
+            img: () => (_outilsHC() && _outilsHC().menus[0] && _outilsHC().menus[0].icone) || 'control_select_menu.png',
+            visible: () => !!(_outilsHC() && _outilsHC().menus.length),
+            faire: ancre => ouvrirMenuOutils(ancre, _outilsHC().menus[0])}
+});
+
+// La palette ouverte sur un widget nommé (onglet « Hideable Control ») :
+// chaque widget du chemin y mène.
+function ouvrirPaletteSur(nom){
+  if(!_bdd) return;
+  const chemin = [];
+  const chercher = n => {
+    const widgets = n.enfants.filter(e => e.enfants);
+    for(let i = 0; i < widgets.length; i++){
+      chemin.push([n, i]);
+      if(widgets[i].nom === nom || chercher(widgets[i])) return true;
+      chemin.pop();
+    }
+    return false;
+  };
+  if(chercher(_bdd.arbre)){
+    for(const [n, i] of chemin) _palSel.set(n.id, i);
+    try { localStorage.setItem('palSel', JSON.stringify([..._palSel])); } catch(e){}
+  }
+  _palFiltre = '';
+  const r = document.getElementById('palRech');
+  if(r) r.value = '';
+  montrerOnglet('palette');
+  dessinerPalette();
+}
+
+// Sélection d'un bouton GlobalKeyCommandSelect : les pions de la carte
+// de jeu dont la propriété vaut la valeur cherchée (une expression {…}
+// est évaluée), ajoutés à la sélection. Ceux qu'on ne peut pas
+// sélectionner (couche masquée, HIP adverse) n'y entrent pas.
+const _COMPARAISONS = {EQUALS: '==', NOT_EQUALS: '!=', GREATER: '>', GREATER_EQUALS: '>=', LESS: '<', LESS_EQUALS: '<=',
+                       MATCH: '=~', NOT_MATCH: '!~'};
+function selectionnerParPropriete(e){
+  if(!_source){ chatLog('⚠️ Aucune partie ouverte'); return 0; }
+  const expr = v => /^\{[^]*\}$/.test(v) ? String(evaluerExpression(v.slice(1, -1), {}) ?? '') : v;
+  const valeur = expr(e.valeur);
+  const op = _COMPARAISONS[e.mode] || '==';
+  const cibles = vivants().filter(p => {
+    if(!selectionnable(p) || p.ailleurs || (e.prop && !p.seg.includes(e.prop))) return false;
+    const te = _typeEtEtat(p.seg);
+    if(!te) return false;
+    const ts = _developperPrototypes(_splitTypeState(p.seg), 0);
+    const pr = proprietesPion(p, ts.typ, ts.eta);
+    if(e.prop && !_comparer(pr[e.prop] ?? '', op, valeur)) return false;
+    return !e.filtre || evaluerCondition(e.filtre.replace(/^\{|\}$/g, ''), pr);
+  });
+  if(cibles.length) selectionner(cibles, 'ajouter');
+  chatLog(`☑️ ${e.nom} : ${cibles.length} pion(s) ajouté(s) à la sélection`);
+  return cibles.length;
+}
+
+// Menu d'un ToolbarMenu : ses entrées sont les boutons qu'il nomme —
+// sélections, ou autres menus (Allied, Axis, Perimeter), qui s'ouvrent à
+// leur tour à sa place, avec un retour. Menu flottant à la souris, feuille
+// du bas au doigt.
+function ouvrirMenuOutils(ancre, menu){
+  fermerMenu();
+  const O = _outilsHC();
+  if(!O || !menu) return;
+  const entrees = m => m.items.map(n => O.elements.get(n)).filter(e => e && e.genre !== 'maj');
+  const tactile = _profil && _profil !== 'pc';
+  const pileMenus = [menu];
+  let f = null, boite = null;
+  if(tactile) f = ouvrirFeuille({id: 'feuilleHC', titre: 'Sélectionner des marqueurs'});
+  else {
+    boite = document.createElement('div');
+    boite.id = 'ctx';
+    boite.addEventListener('pointerdown', e => e.stopPropagation());
+    document.body.appendChild(boite);
+  }
+  const placer = () => {
+    if(!boite) return;
+    let r = ancre && ancre.isConnected ? ancre.getBoundingClientRect() : null;
+    if(!r || !r.width) r = document.getElementById('mapWrap').getBoundingClientRect(), r = {left: r.left + 40, bottom: r.top + 40};
+    boite.style.left = Math.max(4, Math.min(r.left, window.innerWidth - boite.offsetWidth - 4)) + 'px';
+    boite.style.top = Math.max(4, Math.min(r.bottom + 2, window.innerHeight - boite.offsetHeight - 4)) + 'px';
+  };
+  const item = (texte, icone, bulle, faire, sousMenu) => {
+    const it = document.createElement(tactile ? 'button' : 'div');
+    if(tactile){ it.type = 'button'; it.className = 'act ligne hcItem'; } else it.className = 'it hcItem';
+    if(icone){
+      const im = document.createElement('img');
+      im.alt = ''; im.className = 'hcIcone';
+      chargerImage(icone).then(u => { if(u) im.src = u; });
+      it.appendChild(im);
+    }
+    const lb = document.createElement('span');
+    lb.className = 'lb'; lb.textContent = texte + (sousMenu ? ' ▸' : '');
+    it.appendChild(lb);
+    if(bulle) it.title = bulle;
+    it.addEventListener('click', e => { e.stopPropagation(); faire(); });
+    (tactile ? f.corps : boite).appendChild(it);
+  };
+  const montrer = () => {
+    const m = pileMenus[pileMenus.length - 1];
+    (tactile ? f.corps : boite).replaceChildren();
+    if(pileMenus.length > 1) item('◀ Retour', '', '', () => { pileMenus.pop(); montrer(); });
+    for(const e of entrees(m)){
+      if(e.genre === 'menu') item(e.nom, e.icone, e.bulle, () => { pileMenus.push(e); montrer(); }, true);
+      else item(e.nom, e.icone, e.bulle, () => { if(f) f.fermer(); else fermerMenu(); selectionnerParPropriete(e); });
+    }
+    placer();
+  };
+  montrer();
+}
 for(const d of DES) ACTIONS[d.id] = {lib: d.titre, court: d.lib, ico: d.lib, touche: d.touche, faire: d.faire, de: true};
 
 // ── Rendu d'une action, sous la forme demandée :
@@ -503,6 +637,7 @@ const DISPOSITIONS = {
     barre: ['ouvrir', 'nouvelle', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'zoom100',
             'rotGauche', 'rotDroite', 'rot180', 'rot0',
             '|', 'relecture', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'sanPieges',
+            '|', 'hcPoser', 'hcVoir', 'hcCycle', 'hcSel',
             '|', 'pions', 'journal', '|', 'reseau', 'utilisateur', '|', 'config', 'raccourcis'],
     // La barre QC de VASL (Quick Counters) : marqueurs à tirer sur la carte.
     barreQC: true,
@@ -732,7 +867,7 @@ function placerColonne(c){
 // sélection des overlays reste : sans elle, un overlay posé ne pourrait
 // plus être ni déplacé ni retiré au doigt.
 const RAIL_TACTILE = ['ouvrir', 'nouvelle', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables',
-  'oba', 'bin', 'couche_overlay', 'rotDroite', 'rot180', 'sanPieges'];
+  'oba', 'bin', 'couche_overlay', 'hcPoser', 'hcVoir', 'hcCycle', 'hcSel', 'rotDroite', 'rot180', 'sanPieges'];
 // Réglages de la roue ⚙ en affichage tactile : préférences (utilisateur,
 // LOS, décompte), identification, partie à distance, dés 3D, affichage
 // ordinateur, mise à jour. Le côté de la colonne (⇄) est dans la colonne.

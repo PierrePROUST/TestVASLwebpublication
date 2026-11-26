@@ -717,6 +717,13 @@ body.maj .pion.immob{pointer-events:auto}
    laisse voir les unités qu'il dissimule dessous (Concealment de VASL). */
 .pion.qTransparent{opacity:.45}
 #reperes{position:absolute;left:0;top:0;z-index:8400;pointer-events:none;overflow:visible}
+/* Zones d'effet et ombres de carte (AreaOfEffect, MapShader) : sur les
+   boards, sous les overlays et les pions. Couche de pièces masquée
+   (LayerControl) : ni dessinée ni saisissable. */
+#airesCarte{position:absolute;left:0;top:0;z-index:5;pointer-events:none;overflow:visible}
+.pion.calqueEteint{display:none !important}
+.hcItem{display:flex;align-items:center;gap:6px}
+.hcItem .hcIcone{width:22px;height:22px;object-fit:contain;flex:none}
 #filLOS{position:absolute;left:0;top:0;z-index:8500;pointer-events:none;overflow:visible}
 #liensPions{position:absolute;left:0;top:0;z-index:3;pointer-events:none;overflow:visible}
 .etiqLOS,.etiqLien{position:absolute;z-index:8600;pointer-events:none;transform-origin:0 0;white-space:nowrap;
