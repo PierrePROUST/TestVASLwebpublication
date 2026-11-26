@@ -97,7 +97,7 @@ const EN = {
   'Tourner l\'éventail de 90°': 'Rotate the stack view 90°',
   'Flare : montrer la pile à l\'adversaire': 'Flare: show the stack to your opponent',
   'Flare (montrer un point à l\'adversaire)': 'Flare (show a point to your opponent)',
-  'Alt+clic · double appui dans le vide': 'Alt+click · double tap on empty map',
+  'Ctrl+clic · Cmd+clic (Mac) · Alt+clic · double appui dans le vide': 'Ctrl+click · Cmd+click (Mac) · Alt+click · double tap on empty map',
   'Aucun': 'None', 'Désélectionner tous les pions de la pile': 'Deselect all counters of the stack',
   'Retirer de la sélection': 'Remove from selection', 'Ajouter à la sélection': 'Add to selection',
   'poses multiples': 'multiple placements', 'Annuler': 'Cancel',
