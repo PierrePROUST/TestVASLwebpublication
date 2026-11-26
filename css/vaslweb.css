@@ -669,6 +669,10 @@ body.maj .pion.immob{pointer-events:auto}
 /* Terrain sous la pile (CounterDetailViewer « show terrain beneath ») */
 .survol .terrain{display:block}
 .survol .lieuT{font-size:10px;line-height:1.1;opacity:.85}
+/* Au doigt (appui simple sur une pile) : dans la largeur de l'écran, les
+   pions passent à la ligne. */
+.survol.tap .rang{flex-wrap:wrap;max-width:calc(100vw - 24px)}
+.survol.tap .terrain{max-width:calc(100vw - 24px);height:auto}
 #ctx,.ssmenu{position:fixed;z-index:9600;min-width:190px;max-width:340px;max-height:80vh;overflow:auto;
   background:var(--menu-fond);color:var(--menu-texte);border:1px solid var(--menu-bord);border-radius:4px;
   box-shadow:0 6px 20px rgba(0,0,0,.55);font-size:13px;padding:3px 0;user-select:none;-webkit-user-select:none}

@@ -276,6 +276,9 @@ function retirerSelection(){
 function majBarrePile(){
   let b = document.getElementById('barrePile');
   const montrer = _profil && (_sel.size || _pileSel) && !_eventail && !_modeCarte;
+  // L'aperçu de la pile touchée la suit : il part avec elle, et se refait
+  // après chaque commande (face, marqueurs).
+  if(_survolTap && (!montrer || _survolTap !== _pileSel)) cacherSurvol();
   document.body.classList.toggle('avecBarrePile', !!montrer);
   if(!montrer){ if(b) b.remove(); if(typeof _placerVolants === 'function') _placerVolants(); return; }
   if(!b){
@@ -304,6 +307,7 @@ function majBarrePile(){
   b.appendChild(_croixFermer('Fermer la pile'));
   _placerBarrePile();
   _placerVolants();
+  if(_survolTap) survolPileTactile(_survolTap);
 }
 function _placerBarrePile(){
   const b = document.getElementById('barrePile');
@@ -748,7 +752,43 @@ function appuiSurPile(k){
   const double = _dernierAppui.k === k && Date.now() - _dernierAppui.t < 350;
   _dernierAppui = {k, t: Date.now()};
   if(!(_sel.size && pileEntiereSel(k)) || !_eventail || _eventail.k !== k) selectionnerPile(k);
-  if(double && pile(k).some(selectionnable)) ouvrirEventail(k);
-  else majBarrePile();
+  if(double && pile(k).some(selectionnable)){ cacherSurvol(); ouvrirEventail(k); }
+  else { _survolTap = k; majBarrePile(); }
+}
+
+// ── Aperçu de la pile au doigt : l'appui simple qui sélectionne une pile
+// montre, au-dessus d'elle, l'aperçu que le PC montre au survol de la
+// souris (afficherSurvol, js/dissimulation.js) : l'hexagone et son
+// terrain sous les pions (« show terrain beneath » du CounterDetailViewer
+// de VASSAL), puis les pions de la pile. Il ne prend aucun geste ; il
+// part avec la sélection, au défilement de la carte, à l'éventail ou
+// quand un pion est saisi.
+let _survolTap = null;                   // clé de la pile montrée, ou null
+function survolPileTactile(k){
+  const s = pile(k).filter(p => !p.cache);
+  const h = s[s.length - 1];
+  if(!h || !h.el || !h.el.isConnected){ cacherSurvol(); return; }
+  const r = h.el.getBoundingClientRect();
+  afficherSurvol(k, r.left + r.width / 2, r.top);
+  const t = document.getElementById('survol');
+  _survolTap = t ? k : null;
+  if(!t) return;
+  // Dans la largeur de l'écran (les pions passent à la ligne), au-dessus ou
+  // au-dessous de la pile, du côté le plus dégagé entre le haut de la carte
+  // et la barre de pile ; réduit s'il n'y tient pas.
+  t.classList.add('tap');
+  const w = document.getElementById('mapWrap').getBoundingClientRect();
+  const barre = document.getElementById('barrePile');
+  const bas = barre ? barre.getBoundingClientRect().top : Math.min(w.bottom, window.innerHeight);
+  const haut = Math.max(w.top, 0), marge = 6;
+  const dessus = r.top - haut - 2 * marge, dessous = bas - r.bottom - 2 * marge;
+  const lw = t.offsetWidth, lh = t.offsetHeight;
+  const place = Math.max(dessus, dessous);
+  const ech = Math.max(.4, Math.min(1, place / lh));
+  t.style.transformOrigin = '0 0';
+  t.style.transform = ech < 1 ? `scale(${ech})` : '';
+  const x = Math.max(4, Math.min(r.left + r.width / 2 - lw * ech / 2, window.innerWidth - lw * ech - 4));
+  const y = dessus >= dessous ? Math.max(haut + marge, r.top - marge - lh * ech) : r.bottom + marge;
+  t.style.left = x + 'px'; t.style.top = y + 'px';
 }
 
