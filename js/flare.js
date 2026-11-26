@@ -9,8 +9,9 @@
 // premier Flare du module, celui de la carte de jeu (Main Map). Le coup
 // passe par sendAndLog : il part chez les autres joueurs et entre dans le
 // log ; VASL le rejoue en le relisant. reportFormat vide : rien au chat.
-// Gestes : Alt+clic sur la carte (PC, comme VASL), double appui dans le
-// vide de la carte (doigt), bouton « Flare » de l'éventail de la pile.
+// Gestes : Ctrl+clic (Cmd+clic sur Mac) ou Alt+clic sur la carte (PC),
+// double appui dans le vide de la carte (doigt), bouton « Flare » de
+// l'éventail de la pile.
 const FLARE_ID = 'Flare0';
 const FLARE_DIAMETRE = 100;          // circleSize, en pixels de la carte (circleScale : suit le zoom)
 const FLARE_PULSATIONS = 6;          // flarePulses
@@ -80,17 +81,27 @@ function _vueSurPoint(x, y){
   wrap.scrollTop = v.y * zoom - hv / 2;
 }
 
-// Alt+clic (bouton principal, sans Maj ni Ctrl) : flareKey="keyAlt", comme
-// Flare.mousePressed. Pris avant le pion ou la carte, qui ne le voient pas.
+// Souris, bouton principal, pris avant le pion ou la carte :
+//  · Ctrl+clic (Cmd+clic sur Mac), sans Alt ni Maj : le Flare de VASSAL
+//    réglé sur flareKey="keyCtrl" (SwingUtils.isSelectionToggle). Comme
+//    dans VASSAL, le clic poursuit son chemin : sur un pion, il l'ajoute
+//    aussi à la sélection ou l'en retire. Pas pendant le tracé d'une LOS,
+//    où Ctrl a son sens (plus haut niveau hors toit).
+//  · Alt+clic, sans Maj ni Ctrl : flareKey="keyAlt" du buildFile de VASL,
+//    comme Flare.mousePressed ; le pion ou la carte ne le voient pas.
 function _brancherFlare(){
   const wrap = document.getElementById('mapWrap');
   if(!wrap) return;
   wrap.addEventListener('pointerdown', e => {
-    if(!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey || e.button !== 0) return;
+    if(e.button !== 0 || e.shiftKey || e.pointerType !== 'mouse') return;
+    const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey;
+    const alt = e.altKey && !e.ctrlKey && !e.metaKey;
+    if(!ctrl && !alt) return;
+    if(ctrl && (_filArme || _fil)) return;
     if(e.target.closest && e.target.closest('.eventail, .barrePile, .bandeauMode, .panneauFil, .tablesQRDC')) return;
     const c = clientVersCarte(e.clientX, e.clientY, null, true);
     if(!c) return;
-    e.preventDefault(); e.stopPropagation();
+    if(alt){ e.preventDefault(); e.stopPropagation(); }
     lancerFlare(c.x, c.y);
   }, true);
 }

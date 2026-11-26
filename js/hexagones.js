@@ -10,6 +10,7 @@ const HEX_HX = 28.125;         // composante x des côtés obliques
 // Les milieux des côtés sont ceux de l'accrochage VASSAL (accrocheHex).
 const SNAP_COTE = 0.45;        // le côté ne gagne que tout près de son milieu
 let _hexTable = [];
+let _rectsBoards = [];
 // Les hexagones rangés par cases de GRILLE_HEX pixels : la recherche de
 // l'ancrage ne regarde que les 9 cases autour du point. La case est plus
 // grande que la distance d'accrochage (75 px), ce qui suffit.
@@ -55,10 +56,17 @@ function _buildHexTable(boards){
         // Board retourné : le côté N local devient le côté S de la carte.
         const cotes = [null];
         for(let s = 1; s <= 6; s++) cotes.push(versCarte(a.cotes[b.reversed ? (s + 2) % 6 + 1 : s]));
-        _hexTable.push({name: b.name + col + r, x: p.x, y: p.y, cotes});
+        // Taille de l'hexagone sur la carte (zone d'effet, AreaOfEffect).
+        _hexTable.push({name: b.name + col + r, x: p.x, y: p.y, cotes, hw: g.hw * z, hh: g.hh * z});
       }
     }
   }
+  // Emprise de chaque board sur la carte : une ombre de carte (MapShader)
+  // n'en déborde pas.
+  _rectsBoards = boards.map(b => {
+    const g = geoBoard(b);
+    return {x: (b.px || 0) + BOARD_MARGIN, y: (b.py || 0) + BOARD_MARGIN, w: b.dispW || g.w, h: b.dispH || g.h};
+  });
   // Nom d'ancrage → point, côtés compris (« 33B5 », « 33B5/NE ») : les
   // lieux cités au chat deviennent cliquables.
   _hexParNom = new Map();

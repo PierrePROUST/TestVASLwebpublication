@@ -126,7 +126,7 @@ function aideRaccourcis(){
       ['Mettre au sommet de la pile', libelleTouche(m.top) || '↑'], ['Mettre au fond', libelleTouche(m.bottom) || '↓'],
       ['Monter d\'un cran', libelleTouche(m.up) || '→'], ['Descendre d\'un cran', libelleTouche(m.down) || '←'],
       ['Replier, puis désélectionner', 'Échap'],
-      ['Flare (montrer un point à l\'adversaire)', 'Alt+clic · double appui dans le vide']])}
+      ['Flare (montrer un point à l\'adversaire)', 'Ctrl+clic · Cmd+clic (Mac) · Alt+clic · double appui dans le vide']])}
     ${lignes('Ligne de vue (pendant le tracé)', [['Niveau de la cible', '↑ / ↓'], ['Niveau de la source', 'Ctrl+↑ / Ctrl+↓'],
       ['Plus haut niveau hors toit', 'Ctrl à l\'appui'], ['Annuler', 'Échap']])}
     ${lignes('Carte', [['Zoom', 'Ctrl+molette · Cmd+molette (Mac) · pincement'],

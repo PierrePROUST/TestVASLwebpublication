@@ -166,8 +166,13 @@ function _parseLayers(ts){
       const vrai = v !== undefined && v !== '' && v !== 'false' && v !== '0';
       if(vrai !== ((ch[33] || 'true').replace(/\\/g, '').trim() === 'true')) actif = false;
     }
+    // Échelle de la couche (scale, champ 31 d'un emb2) : les petits
+    // marqueurs de contrôle de Hideable Control Markers dessinent leurs
+    // images à 0,5. Comme Embellishment.getCurrentImageBounds, elle réduit
+    // l'image, pas son décalage.
+    const ech = /^emb2;/.test(ts.typ[i]) ? parseFloat((ch[31] || '').replace(/\\/g, '')) : NaN;
     out.push({i, images, dx: isNaN(dx) ? 0 : dx, dy: isNaN(dy) ? 0 : dy,
-      niveau: isNaN(niveau) ? 0 : Math.abs(niveau), actif});
+      niveau: isNaN(niveau) ? 0 : Math.abs(niveau), actif, echelle: ech > 0 ? ech : 1});
   }
   return out;
 }
@@ -482,7 +487,9 @@ function _tourelle(ts){
 
 // ── Trait Immobilized de VASSAL (« immob; ») :
 //   immob;sélection;mouvement;empilement;description
-// Sélection : i (Maj+clic), t (Ctrl), c (Alt), n (jamais). Empilement :
+// Sélection : i (Maj+clic), t (Ctrl), c (Alt), n (jamais), et g : la
+// pièce ignore la grille (ignoreGrid), elle reste là où on la lâche — les
+// petits marqueurs de contrôle de Hideable Control Markers. Empilement :
 // L la pièce s'empile, R (défaut) jamais — elle reste seule à sa place.
 function _immobilise(ts){
   if(!ts) return null;
@@ -490,7 +497,7 @@ function _immobilise(ts){
   if(!t) return null;
   const ch = t.replace(/\\(.)/g, '$1').split(';');
   const sel = ch[1] || '', emp = ch[3] === undefined || ch[3] === '' ? 'R' : ch[3];
-  return {maj: /[itc]/.test(sel), jamais: sel.includes('n'), empile: emp.includes('L')};
+  return {maj: /[itc]/.test(sel), jamais: sel.includes('n'), empile: emp.includes('L'), libre: sel.includes('g')};
 }
 // Maj enfoncée : les pièces à sélection Maj+clic deviennent saisissables.
 const _toucheMaj = e => document.body && document.body.classList.toggle('maj', !!e.shiftKey);
@@ -1157,6 +1164,8 @@ async function _chargerImage(path){
       if(r.ok){ path = e; break; }
     }
     if(!r.ok){
+      const ext = await _imageExtension(demande);
+      if(ext) return ext;
       const ovr = await _imageArchiveOverlay(path);
       if(ovr) return ovr;
       throw new Error('HTTP ' + r.status);

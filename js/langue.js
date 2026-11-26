@@ -97,7 +97,7 @@ const EN = {
   'Tourner l\'éventail de 90°': 'Rotate the stack view 90°',
   'Flare : montrer la pile à l\'adversaire': 'Flare: show the stack to your opponent',
   'Flare (montrer un point à l\'adversaire)': 'Flare (show a point to your opponent)',
-  'Alt+clic · double appui dans le vide': 'Alt+click · double tap on empty map',
+  'Ctrl+clic · Cmd+clic (Mac) · Alt+clic · double appui dans le vide': 'Ctrl+click · Cmd+click (Mac) · Alt+click · double tap on empty map',
   'Aucun': 'None', 'Désélectionner tous les pions de la pile': 'Deselect all counters of the stack',
   'Retirer de la sélection': 'Remove from selection', 'Ajouter à la sélection': 'Add to selection',
   'poses multiples': 'multiple placements', 'Annuler': 'Cancel',
@@ -172,6 +172,14 @@ const EN = {
   'Dés : un appui DR, un appui long les catégories': 'Dice: tap for a DR, long press for categories',
   'SAN et pièges…': 'SAN and Booby Traps…', 'SAN et pièges': 'SAN and Booby Traps',
   'Pile et palette': 'Stack and counters', 'Vues': 'Views',
+  // Hideable Control Markers (boutons de la carte)
+  'Poser un marqueur de contrôle ou de périmètre (palette)': 'Place a control or perimeter marker (counters palette)',
+  'Montrer les marqueurs de contrôle et de périmètre': 'Show control and perimeter markers',
+  'Masquer les marqueurs de contrôle et de périmètre': 'Hide control and perimeter markers',
+  'Couche du dessus, tour à tour : pions, contrôle, périmètre': 'Cycle units / control / perimeter markers to top',
+  'Sélectionner des marqueurs de contrôle ou de périmètre…': 'Select specific control / perimeter markers…',
+  'Sélectionner des marqueurs': 'Select markers', '◀ Retour': '◀ Back',
+  'Contrôle': 'Control', 'Couches': 'Layers', 'Sélection': 'Select',
   'DR [F2] — appui long ou glissé vers le haut : toutes les catégories': 'DR [F2] — long press or swipe up: all categories',
   'Lancer un DR ; appui long : catégories de dés': 'Roll a DR; long press: dice categories',
   // Chat

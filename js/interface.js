@@ -53,9 +53,9 @@ function basculerVueCarte(){
 // (QC) qui entourent de rouge, au-dessus des pions, les hexagones des
 // pièces brisées ou MALF — couche BRK active, ni HIP ni dissimulées —, des
 // DM et des Disrupt, et ceux des snipers (cercle de 1,5 hexagone). Les
-// boutons portent la LMG russe (gpid 482) et le sniper US (gpid 778) de la
-// palette.
-const ICONE_BRISES = {gpid: '482', ico: '⭕'};
+// boutons portent la LMG russe (gpid 482) retournée sur sa face MALF
+// (couche BRK active) et le sniper US (gpid 778) de la palette.
+const ICONE_BRISES = {gpid: '482', ico: '⭕', brk: true};
 const ICONE_SNIPER = {gpid: '778', ico: '🎯'};
 const ICONE_NOUVELLE = {gpid: '3b5:7124', ico: '🆕'};
 const _reperes = {brises: false, sniper: false};
@@ -134,7 +134,9 @@ const ACTIONS = {
   all:      {lib: 'Remove all — retirer tous les pions d\'un type…', court: 'ALL', img: 'QC/Remove.png',
              faire: ancre => ouvrirMassRemover(ancre)},
   // BoardSwapper de VASL (menu de la carte) : changer les boards de la partie.
-  boards:   {lib: 'Pick new boards for this scenario', court: 'Boards', img: 'newBoards.gif',
+  // Icône : un morceau du board 00 (board vierge de VASL), newBoards.gif de
+  // VASL à défaut.
+  boards:   {lib: 'Pick new boards for this scenario', court: 'Boards', img: '00', imgBoard: 'newBoards.gif',
              faire: () => ouvrirChoixBoards(), actif: () => !!_source},
   brises:   {lib: 'Entourer les unités brisées et les armes MALF', court: 'Broken', ico: '⭕', pion: ICONE_BRISES,
              faire: () => basculerRepere('brises'), allume: () => _reperes.brises},
@@ -237,6 +239,140 @@ const ACTIONS = {
              actif: () => _logPos < _etapes.length},
   lgFin:    {lib: 'Fin du log', ico: '⏭', faire: () => allerLog(_etapes.length), actif: () => _logPos < _etapes.length}
 };
+
+// ═══ HIDEABLE CONTROL MARKERS — BOUTONS DE LA CARTE ═══
+// Les boutons que l'extension ajoute à la barre de la carte de VASL :
+// DCMenus (les marqueurs à poser : ici, la palette ouverte sur leur
+// onglet), LayerControlHCSwap (montrer / masquer les couches Control et
+// Perimeter), LayerControlHCCycle (couche du dessus, tour à tour) et le
+// menu de sélection (ToolbarMenu) : tous les marqueurs de contrôle, de
+// périmètre, ou ceux d'une nation, d'une couleur — chaque choix s'ajoute à
+// la sélection (GlobalKeyCommandSelect, MassKeyCommandSelect). Les icônes
+// sont celles de l'extension. Absents tant que l'extension n'est pas lue.
+const _outilsHC = () => (_bdd && _bdd.outilsCarte) || null;
+Object.assign(ACTIONS, {
+  hcPoser: {lib: 'Poser un marqueur de contrôle ou de périmètre (palette)', court: 'Contrôle',
+            img: () => (_outilsHC() && _outilsHC().poser && _outilsHC().poser.icone) || 'multi_menu.png',
+            visible: () => !!(_outilsHC() && _outilsHC().poser), faire: () => ouvrirPaletteSur('Hideable Control')},
+  hcVoir:  {lib: () => calquesHCMasques() ? 'Montrer les marqueurs de contrôle et de périmètre'
+                                          : 'Masquer les marqueurs de contrôle et de périmètre',
+            court: 'Contrôle', img: () => calquesHCMasques() ? 'HC/building.png' : 'HC/control_on.png',
+            allume: calquesHCMasques, visible: () => !!controleCalques('Switch'),
+            faire: () => commanderCalques(controleCalques('Switch'))},
+  hcCycle: {lib: 'Couche du dessus, tour à tour : pions, contrôle, périmètre', court: 'Couches',
+            img: () => ({Control: 'HC/control_cycle2.png', Perimeter: 'HC/control_cycle3.png'})[calqueDuDessus()] || 'HC/control_cycle1.png',
+            allume: () => !!calqueDuDessus(), visible: () => !!controleCalques('Rotate'),
+            faire: () => commanderCalques(controleCalques('Rotate'))},
+  hcSel:   {lib: 'Sélectionner des marqueurs de contrôle ou de périmètre…', court: 'Sélection',
+            img: () => (_outilsHC() && _outilsHC().menus[0] && _outilsHC().menus[0].icone) || 'control_select_menu.png',
+            visible: () => !!(_outilsHC() && _outilsHC().menus.length),
+            faire: ancre => ouvrirMenuOutils(ancre, _outilsHC().menus[0])}
+});
+
+// La palette ouverte sur un widget nommé (onglet « Hideable Control ») :
+// chaque widget du chemin y mène.
+function ouvrirPaletteSur(nom){
+  if(!_bdd) return;
+  const chemin = [];
+  const chercher = n => {
+    const widgets = n.enfants.filter(e => e.enfants);
+    for(let i = 0; i < widgets.length; i++){
+      chemin.push([n, i]);
+      if(widgets[i].nom === nom || chercher(widgets[i])) return true;
+      chemin.pop();
+    }
+    return false;
+  };
+  if(chercher(_bdd.arbre)){
+    for(const [n, i] of chemin) _palSel.set(n.id, i);
+    try { localStorage.setItem('palSel', JSON.stringify([..._palSel])); } catch(e){}
+  }
+  _palFiltre = '';
+  const r = document.getElementById('palRech');
+  if(r) r.value = '';
+  montrerOnglet('palette');
+  dessinerPalette();
+}
+
+// Sélection d'un bouton GlobalKeyCommandSelect : les pions de la carte
+// de jeu dont la propriété vaut la valeur cherchée (une expression {…}
+// est évaluée), ajoutés à la sélection. Ceux qu'on ne peut pas
+// sélectionner (couche masquée, HIP adverse) n'y entrent pas.
+const _COMPARAISONS = {EQUALS: '==', NOT_EQUALS: '!=', GREATER: '>', GREATER_EQUALS: '>=', LESS: '<', LESS_EQUALS: '<=',
+                       MATCH: '=~', NOT_MATCH: '!~'};
+function selectionnerParPropriete(e){
+  if(!_source){ chatLog('⚠️ Aucune partie ouverte'); return 0; }
+  const expr = v => /^\{[^]*\}$/.test(v) ? String(evaluerExpression(v.slice(1, -1), {}) ?? '') : v;
+  const valeur = expr(e.valeur);
+  const op = _COMPARAISONS[e.mode] || '==';
+  const cibles = vivants().filter(p => {
+    if(!selectionnable(p) || p.ailleurs || (e.prop && !p.seg.includes(e.prop))) return false;
+    const te = _typeEtEtat(p.seg);
+    if(!te) return false;
+    const ts = _developperPrototypes(_splitTypeState(p.seg), 0);
+    const pr = proprietesPion(p, ts.typ, ts.eta);
+    if(e.prop && !_comparer(pr[e.prop] ?? '', op, valeur)) return false;
+    return !e.filtre || evaluerCondition(e.filtre.replace(/^\{|\}$/g, ''), pr);
+  });
+  if(cibles.length) selectionner(cibles, 'ajouter');
+  chatLog(`☑️ ${e.nom} : ${cibles.length} pion(s) ajouté(s) à la sélection`);
+  return cibles.length;
+}
+
+// Menu d'un ToolbarMenu : ses entrées sont les boutons qu'il nomme —
+// sélections, ou autres menus (Allied, Axis, Perimeter), qui s'ouvrent à
+// leur tour à sa place, avec un retour. Menu flottant à la souris, feuille
+// du bas au doigt.
+function ouvrirMenuOutils(ancre, menu){
+  fermerMenu();
+  const O = _outilsHC();
+  if(!O || !menu) return;
+  const entrees = m => m.items.map(n => O.elements.get(n)).filter(e => e && e.genre !== 'maj');
+  const tactile = _profil && _profil !== 'pc';
+  const pileMenus = [menu];
+  let f = null, boite = null;
+  if(tactile) f = ouvrirFeuille({id: 'feuilleHC', titre: 'Sélectionner des marqueurs'});
+  else {
+    boite = document.createElement('div');
+    boite.id = 'ctx';
+    boite.addEventListener('pointerdown', e => e.stopPropagation());
+    document.body.appendChild(boite);
+  }
+  const placer = () => {
+    if(!boite) return;
+    let r = ancre && ancre.isConnected ? ancre.getBoundingClientRect() : null;
+    if(!r || !r.width) r = document.getElementById('mapWrap').getBoundingClientRect(), r = {left: r.left + 40, bottom: r.top + 40};
+    boite.style.left = Math.max(4, Math.min(r.left, window.innerWidth - boite.offsetWidth - 4)) + 'px';
+    boite.style.top = Math.max(4, Math.min(r.bottom + 2, window.innerHeight - boite.offsetHeight - 4)) + 'px';
+  };
+  const item = (texte, icone, bulle, faire, sousMenu) => {
+    const it = document.createElement(tactile ? 'button' : 'div');
+    if(tactile){ it.type = 'button'; it.className = 'act ligne hcItem'; } else it.className = 'it hcItem';
+    if(icone){
+      const im = document.createElement('img');
+      im.alt = ''; im.className = 'hcIcone';
+      chargerImage(icone).then(u => { if(u) im.src = u; });
+      it.appendChild(im);
+    }
+    const lb = document.createElement('span');
+    lb.className = 'lb'; lb.textContent = texte + (sousMenu ? ' ▸' : '');
+    it.appendChild(lb);
+    if(bulle) it.title = bulle;
+    it.addEventListener('click', e => { e.stopPropagation(); faire(); });
+    (tactile ? f.corps : boite).appendChild(it);
+  };
+  const montrer = () => {
+    const m = pileMenus[pileMenus.length - 1];
+    (tactile ? f.corps : boite).replaceChildren();
+    if(pileMenus.length > 1) item('◀ Retour', '', '', () => { pileMenus.pop(); montrer(); });
+    for(const e of entrees(m)){
+      if(e.genre === 'menu') item(e.nom, e.icone, e.bulle, () => { pileMenus.push(e); montrer(); }, true);
+      else item(e.nom, e.icone, e.bulle, () => { if(f) f.fermer(); else fermerMenu(); selectionnerParPropriete(e); });
+    }
+    placer();
+  };
+  montrer();
+}
 for(const d of DES) ACTIONS[d.id] = {lib: d.titre, court: d.lib, ico: d.lib, touche: d.touche, faire: d.faire, de: true};
 
 // ── Rendu d'une action, sous la forme demandée :
@@ -277,6 +413,7 @@ function rendreAction(id, forme = 'icone'){
     } else if(a.img){
       const im = document.createElement('img');
       im.alt = '';
+      if(a.imgBoard) im.className = 'icBoard';
       el.appendChild(im);
     } else if(a.ico && forme !== 'bouton'){
       const i = document.createElement('span');
@@ -327,6 +464,12 @@ function _composerIconePion(spec = ICONE_PION){
     if(!def) return null;
     const i = def.T.findIndex(t => /^label;/.test(t) && t.split(';')[2] === 'Name');
     if(i >= 0 && spec.nom) def.S[i] = spec.nom;
+    // « brk » : la face retournée, couche Embellishment de la propriété BRK
+    // activée (niveau positif), comme après Ctrl+F.
+    if(spec.brk){
+      const j = def.T.findIndex(t => /^emb2;/.test(t) && t.split(';').includes('BRK'));
+      if(j >= 0) def.S[j] = String(Math.abs(parseInt(def.S[j], 10) || 1)) + (def.S[j] || '').replace(/^-?\d+/, '');
+    }
     const d = lirePiece('+/icone/' + encoderTraits(def.T) + '/' + encoderTraits(def.S));
     const m = document.createElement('div');
     m.className = 'modelePion';
@@ -360,6 +503,30 @@ function iconePion(spec = ICONE_PION){
   return b;
 }
 
+// ── Icône d'un board : un morceau du haut (H1 à J3 sur le board 00 :
+// hexagones, bois et route), réduit en vignette. L'archive vient du
+// dépôt VASL comme pour la carte (et du cache du service worker hors
+// ligne) ; à défaut, l'image « secours » du dépôt VASL.
+const _iconesBoard = new Map();          // nom → Promise<URL | null>
+function iconeBoard(nom, secours){
+  if(!_iconesBoard.has(nom)) _iconesBoard.set(nom, (async () => {
+    const gif = _gifDuBoard(await _archive(nom), nom);
+    if(!gif) throw new Error('bd' + nom + '.gif absent');
+    const bm = await createImageBitmap(new Blob([gif], {type: 'image/gif'}));
+    const x0 = Math.min(330, bm.width - 288);
+    const c = document.createElement('canvas');
+    c.width = 160; c.height = 100;
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(bm, x0, 0, 288, 180, 0, 0, c.width, c.height);
+    bm.close();
+    const b = await new Promise(r => c.toBlob(r, 'image/png'));
+    if(!b) throw new Error('vignette');
+    return URL.createObjectURL(b);
+  })().catch(() => secours ? chargerImage(secours) : null));
+  return _iconesBoard.get(nom);
+}
+
 // Une feuille du bas qui liste des actions, en grand.
 function ouvrirFeuilleActions(titre, ids, id = 'feuilleActions'){
   const f = ouvrirFeuille({id, titre});
@@ -390,7 +557,7 @@ function _majAction(el, a, id){
   const im = a.img && el.querySelector(':scope > img');
   if(im && im._chemin !== _v(a.img)){
     const ch = im._chemin = _v(a.img);
-    chargerImage(ch).then(u => { if(u && im._chemin === ch) im.src = u; });
+    (a.imgBoard ? iconeBoard(ch, a.imgBoard) : chargerImage(ch)).then(u => { if(u && im._chemin === ch) im.src = u; });
   }
   el.title = t ? `${lib} [${t}]` : lib;
   el.setAttribute('aria-label', lib);
@@ -470,6 +637,7 @@ const DISPOSITIONS = {
     barre: ['ouvrir', 'nouvelle', 'vsav', 'log', 'logTxt', '|', 'undo', '|', 'zoomMoins', 'zoomTxt', 'zoomPlus', 'ajuster', 'zoom100',
             'rotGauche', 'rotDroite', 'rot180', 'rot0',
             '|', 'relecture', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables', 'oba', 'bin', 'sanPieges',
+            '|', 'hcPoser', 'hcVoir', 'hcCycle', 'hcSel',
             '|', 'pions', 'journal', '|', 'reseau', 'utilisateur', '|', 'config', 'raccourcis'],
     // La barre QC de VASL (Quick Counters) : marqueurs à tirer sur la carte.
     barreQC: true,
@@ -699,7 +867,7 @@ function placerColonne(c){
 // sélection des overlays reste : sans elle, un overlay posé ne pourrait
 // plus être ni déplacé ni retiré au doigt.
 const RAIL_TACTILE = ['ouvrir', 'nouvelle', 'vsav', 'log', 'los', 'losMuet', 'unmoved', 'all', 'boards', 'brises', 'sniper', 'masquer', 'tables',
-  'oba', 'bin', 'couche_overlay', 'rotDroite', 'rot180', 'sanPieges'];
+  'oba', 'bin', 'couche_overlay', 'hcPoser', 'hcVoir', 'hcCycle', 'hcSel', 'rotDroite', 'rot180', 'sanPieges'];
 // Réglages de la roue ⚙ en affichage tactile : préférences (utilisateur,
 // LOS, décompte), identification, partie à distance, dés 3D, affichage
 // ordinateur, mise à jour. Le côté de la colonne (⇄) est dans la colonne.

@@ -357,6 +357,13 @@ function _dessous(p){
   return 'null';
 }
 
+// Point d'une pièce qui ignore la grille (Immobilized « g ») : là où on
+// la lâche, sans accrochage.
+function pointLibre(x, y){
+  const a = ancragePlusProche(x, y);
+  return {x: Math.round(x), y: Math.round(y), label: a ? a.label : undefined};
+}
+
 // Position finale d'un lâcher : le centre d'une case de panneau (carte de
 // scénario, bandeau), sinon l'ancrage d'hexagone, ou une pile déjà là —
 // les piles d'un fichier VASL ne tombent pas toujours au pixel près sur
@@ -383,7 +390,7 @@ function deplacer(liste, x, y, campConfirme){
   // est bloqué jusqu'à la réponse de la fenêtre de confirmation.
   if(!campConfirme && !confirmerCampAdverse(liste, () => deplacer(liste, x, y, true))) return;
   _avantAction();
-  const pos = positionDepot(x, y, liste);
+  const pos = liste.every(p => p.libre) ? pointLibre(x, y) : positionDepot(x, y, liste);
   const kArr = pos.x + ',' + pos.y;
   // Une unité dissimulée sortie de sa pile emporte sa dissimulation
   // (A12.15) : le « ? » qui ne couvrirait plus rien la suit, et entre
@@ -398,7 +405,10 @@ function deplacer(liste, x, y, campConfirme){
   // Une unité arrive toujours au rez-de-chaussée (B23.421) : sous le
   // marqueur d'étage le plus bas de la pile d'arrivée, s'il y en a un. Le
   // joueur la fait ensuite monter en la plaçant sur le marqueur.
-  const deja = pile(kArr).filter(q => !liste.includes(q));
+  // Les pions déjà là, dans les couches de ceux qui arrivent.
+  const couchesL = new Set(liste.map(p => p.calque || ''));
+  const deja = vivants().filter(q => !q.seul && q.x === pos.x && q.y === pos.y && couchesL.has(q.calque || '')
+                                     && !liste.includes(q)).sort((a, b) => a.ordre - b.ordre);
   const iEtage = typeof _niveauCompteur === 'function' && !liste.some(q => _niveauCompteur(q) !== null)
     ? deja.findIndex(q => _niveauCompteur(q) !== null) : -1;
   if(iEtage >= 0){
@@ -434,7 +444,7 @@ function deplacer(liste, x, y, campConfirme){
   // reçoivent un « ? » neuf, faute de quoi la pile d'arrivée les
   // démasquerait.
   _qmarkPourPartants(liste, kArr, sousQ);
-  new Set([...avant.map(a => a.k), kArr]).forEach(k => { ajusterDissimulation(k); rendrePile(k); });
+  new Set([...avant.map(a => a.k), kArr, ...liste.map(cle)]).forEach(k => { ajusterDissimulation(k); rendrePile(k); });
   // La sélection reste celle des pions déplacés : les unités qui
   // occupaient déjà l'hexagone n'y entrent pas, et le glissé suivant
   // poursuit le mouvement sans les embarquer.

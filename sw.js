@@ -6,7 +6,8 @@
 // Les ressources VASL (raw.githubusercontent.com), PeerJS (unpkg) et les
 // bibliothèques de lecture des PDF de scénario (cdn.jsdelivr.net, versions
 // fixées) : gardées au fil des parties, pour rejouer hors ligne les boards
-// déjà vus. Les métadonnées XML et le buildFile changent avec VASL : réseau
+// déjà vus. Les métadonnées XML, le buildFile et les extensions (.vmdx,
+// js/extensions.js) changent avec VASL : réseau
 // d'abord ; les boards, overlays et images : cache d'abord.
 // ═══════════════════════════════════════════════════════════════
 // VERSION change à chaque publication : le cache de la version précédente
@@ -16,7 +17,7 @@
 // et de VASLweb.html, pour qu'une page neuve ne prenne jamais un script de
 // la version d'avant dans un cache HTTP.
 // APP : tout fichier de l'application.
-const VERSION = 'los-efface';
+const VERSION = 'icones-flare';
 const CACHE_APP = 'vaslweb-app-' + VERSION;
 // Nom fixe ; « -v1 » garde le cache des boards des versions d'avant.
 const CACHE_VASL = 'vaslweb-vasl-v1';
@@ -31,44 +32,45 @@ const APP = [
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
   './modeles/nouvelle-partie.vsav',
-  './pwa.js?v=los-efface',
-  './css/vaslweb.css?v=los-efface',
-  './js/outils.js?v=los-efface',
-  './js/donnees/ssr.js?v=los-efface',
-  './js/donnees/overlays-ext.js?v=los-efface',
-  './js/donnees/mouvement.js?v=los-efface',
-  './js/langue.js?v=los-efface',
-  './js/noyau.js?v=los-efface',
-  './js/fichiers.js?v=los-efface',
-  './js/carte.js?v=los-efface',
-  './js/hexagones.js?v=los-efface',
-  './js/los-moteur.js?v=los-efface',
-  './js/los-pions.js?v=los-efface',
-  './js/los-fil.js?v=los-efface',
-  './js/pieces.js?v=los-efface',
-  './js/pions.js?v=los-efface',
-  './js/boards.js?v=los-efface',
-  './js/vlog.js?v=los-efface',
-  './js/mf.js?v=los-efface',
-  './js/commandes.js?v=los-efface',
-  './js/chat-rapports.js?v=los-efface',
-  './js/flare.js?v=los-efface',
-  './js/cvp.js?v=los-efface',
-  './js/dissimulation.js?v=los-efface',
-  './js/tactile.js?v=los-efface',
-  './js/bdd.js?v=los-efface',
-  './js/qrdc.js?v=los-efface',
-  './js/oba.js?v=los-efface',
-  './js/des-utilisateurs.js?v=los-efface',
-  './js/des-3d.js?v=los-efface',
-  './js/ift.js?v=los-efface',
-  './js/reseau.js?v=los-efface',
-  './js/export.js?v=los-efface',
-  './js/preferences.js?v=los-efface',
-  './js/qc.js?v=los-efface',
-  './js/interface.js?v=los-efface',
-  './js/chat.js?v=los-efface',
-  './js/menus.js?v=los-efface'
+  './pwa.js?v=icones-flare',
+  './css/vaslweb.css?v=icones-flare',
+  './js/outils.js?v=icones-flare',
+  './js/donnees/ssr.js?v=icones-flare',
+  './js/donnees/overlays-ext.js?v=icones-flare',
+  './js/donnees/mouvement.js?v=icones-flare',
+  './js/langue.js?v=icones-flare',
+  './js/noyau.js?v=icones-flare',
+  './js/fichiers.js?v=icones-flare',
+  './js/carte.js?v=icones-flare',
+  './js/hexagones.js?v=icones-flare',
+  './js/los-moteur.js?v=icones-flare',
+  './js/los-pions.js?v=icones-flare',
+  './js/los-fil.js?v=icones-flare',
+  './js/pieces.js?v=icones-flare',
+  './js/pions.js?v=icones-flare',
+  './js/boards.js?v=icones-flare',
+  './js/vlog.js?v=icones-flare',
+  './js/mf.js?v=icones-flare',
+  './js/commandes.js?v=icones-flare',
+  './js/chat-rapports.js?v=icones-flare',
+  './js/flare.js?v=icones-flare',
+  './js/cvp.js?v=icones-flare',
+  './js/dissimulation.js?v=icones-flare',
+  './js/tactile.js?v=icones-flare',
+  './js/extensions.js?v=icones-flare',
+  './js/bdd.js?v=icones-flare',
+  './js/qrdc.js?v=icones-flare',
+  './js/oba.js?v=icones-flare',
+  './js/des-utilisateurs.js?v=icones-flare',
+  './js/des-3d.js?v=icones-flare',
+  './js/ift.js?v=icones-flare',
+  './js/reseau.js?v=icones-flare',
+  './js/export.js?v=icones-flare',
+  './js/preferences.js?v=icones-flare',
+  './js/qc.js?v=icones-flare',
+  './js/interface.js?v=icones-flare',
+  './js/chat.js?v=icones-flare',
+  './js/menus.js?v=icones-flare'
 ];
 const HOTES_VASL = ['raw.githubusercontent.com', 'unpkg.com', 'cdn.jsdelivr.net'];
 
@@ -149,7 +151,7 @@ self.addEventListener('fetch', e => {
     // avec cache: 'reload' ; il est pris au réseau et remplace celui du
     // cache. Pas de repli sur le cache : un échec doit se voir.
     if(req.cache === 'reload'){ e.respondWith(rafraichir(req, CACHE_VASL)); return; }
-    const variable = /\.xml$|\/buildFile$/i.test(url.pathname);
+    const variable = /\.xml$|\/buildFile$|\.vmdx$/i.test(url.pathname);
     e.respondWith(variable ? reseauDabord(req, CACHE_VASL) : cacheDabord(req, CACHE_VASL));
   }
 });

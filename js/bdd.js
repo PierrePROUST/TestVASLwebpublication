@@ -34,7 +34,9 @@ function chargerBDD(){
 // l'analyse gardée qui sert.
 // FORMAT_BDD : à augmenter à chaque changement de _analyserBuildFile, pour
 // qu'une analyse gardée par une version précédente soit refaite.
-const FORMAT_BDD = 1;
+// Format 2 : extensions fondues (Hideable Control Markers), composants de
+// la carte (couches, ombres, boutons).
+const FORMAT_BDD = 2;
 let _analysesBuildFile = 0;            // analyses XML faites (tests)
 function _empreinteTexte(t){
   let h = 0x811c9dc5;
@@ -44,6 +46,8 @@ function _empreinteTexte(t){
 
 async function _chargerBDD(){
   chatLog('⏳ Lecture de la base de données des pions VASL…');
+  // Les extensions (js/extensions.js) se lisent pendant ce temps.
+  const extensions = chargerExtensions();
   let garde = null;
   try {
     const g = await _idbLire('bdd', 'buildFile');
@@ -55,9 +59,13 @@ async function _chargerBDD(){
     if(r.ok) texte = await r.text();
   } catch(e){ if(!garde) throw e; }
   if(texte === null && !garde) throw new Error('HTTP ' + (r ? r.status : '?'));
-  const empreinte = texte === null ? null : _empreinteTexte(texte);
+  // L'empreinte tient aussi aux extensions lues : une extension nouvelle,
+  // ou absente cette fois, fait refaire l'analyse.
+  const exts = await extensions;
+  const empreinte = texte === null ? null
+    : _empreinteTexte(texte) + exts.map(x => `|${x.nom}@${x.version}:${x.taille}`).join('');
   if(garde && (texte === null || garde.empreinte === empreinte)) return _bddPrete(garde.bdd);
-  const bdd = _analyserBuildFile(texte);
+  const bdd = _analyserBuildFile(texte, exts);
   _analysesBuildFile++;
   // Gardée telle qu'analysée, avant tout cache ajouté à l'usage (x.lu,
   // _typesPion…) : copiée tout de suite (l'écriture est asynchrone) ; les
@@ -86,24 +94,36 @@ function _bddPrete(bdd){
   for(const p of vivants()) majApparence(p);
   // Les CVP du Casualties Bin se recomptent dès que le module est connu.
   _cvpAJour(false);
-  chatLog(`📚 Base VASL ${_bdd.version} : ${bdd.pions.length} pions, ${bdd.cats.length} catégories`);
+  // Couches de pièces et zones d'effet que déclarent les extensions.
+  assignerCalques();
+  if(_bdd.ombreurs && _bdd.ombreurs.size) _airesPossibles = true;
+  if(_airesPossibles) dessinerAires();
+  const exts = bdd.extensions || [];
+  chatLog(`📚 Base VASL ${_bdd.version} : ${bdd.pions.length} pions, ${bdd.cats.length} catégories`
+    + (exts.length ? ' — extension(s) : ' + exts.map(x => `${x.nom} ${x.version}`).join(', ') : ''));
+  if(typeof rafraichirActions === 'function') rafraichirActions(['hcPoser', 'hcVoir', 'hcCycle', 'hcSel']);
   return _bdd;
 }
 
 // Analyse du buildFile : tout ce que _bdd en garde, sans rien toucher
 // d'autre (le résultat se range tel quel dans IndexedDB).
-function _analyserBuildFile(texte){
+function _analyserBuildFile(texte, exts = []){
   const doc = new DOMParser().parseFromString(texte, 'application/xml');
   const mod = doc.documentElement;
+  // Extensions : leurs composants rejoignent ceux du module.
+  for(const x of exts) fusionnerExtension(doc, x);
   const cats = [], slots = [], idxCat = new Map();
   // Arbre des widgets de la palette, tel que VASL le construit :
   // TabWidget (onglets), ListWidget (liste), BoxWidget (liste déroulante),
   // PanelWidget (grille), et les PieceSlot dans l'ordre du module.
-  let nid = 0;
-  const construire = (el, chemin) => {
+  // Les widgets d'une extension sont numérotés à part : les onglets
+  // retenus de la palette (palSel) gardent les numéros du module.
+  let nid = 0, nidExt = 100000;
+  const construire = (el, chemin, ext) => {
     const t = el.tagName.split('.').pop();
     const nom = el.getAttribute('entryName') || el.getAttribute('name') || '';
-    const noeud = {id: nid++, t, nom, enfants: []};
+    ext = ext || el.hasAttribute('vaslwebExtension');
+    const noeud = {id: ext ? nidExt++ : nid++, t, nom, enfants: []};
     for(const c of el.children){
       const tag = c.tagName.split('.').pop();
       if(tag === 'PieceSlot'){
@@ -115,7 +135,7 @@ function _analyserBuildFile(texte){
         noeud.enfants.push(x);
       } else if(/Widget$/.test(tag)){
         const n = c.getAttribute('entryName') || c.getAttribute('name') || '';
-        noeud.enfants.push(construire(c, n ? [...chemin, n] : chemin));
+        noeud.enfants.push(construire(c, n ? [...chemin, n] : chemin, ext));
       }
     }
     return noeud;
@@ -145,7 +165,10 @@ function _analyserBuildFile(texte){
     const noms = [];
     for(let a = e; a && a !== mod; a = a.parentElement)
       noms.unshift(a.getAttribute('entryName') || a.getAttribute('name') || '');
-    parChemin.set(noms.join('\u0001'), parGpid.get(e.getAttribute('gpid')));
+    // Plusieurs PieceSlot du même nom au même endroit : comme
+    // ComponentPathBuilder, le premier l'emporte.
+    const k = noms.join('\u0001');
+    if(!parChemin.has(k)) parChemin.set(k, parGpid.get(e.getAttribute('gpid')));
   }
   // Bouton « ALL » de la carte (MassRemover) : chaque entrée donne une
   // action et un nom de pion ; les actions gardent l'ordre du module.
@@ -246,7 +269,8 @@ function _analyserBuildFile(texte){
     qrdc.bin = {onglets: ongletsQRDC.id, rang: ongletsQRDC.enfants.length - 1, carte,
                 titre: (m && m.getAttribute('buttonName')) || carte};
   }
-  return {cats, pions: slots, protos, parGpid, parChemin, arbre, massRemover, stackMetrics, qrdc, zones, compteurs, version: mod.getAttribute('version')};
+  return {cats, pions: slots, protos, parGpid, parChemin, arbre, massRemover, stackMetrics, qrdc, zones, compteurs, version: mod.getAttribute('version'),
+          extensions: exts.map(x => ({nom: x.nom, version: x.version})), ...lireComposantsCarte(mod)};
 }
 
 // Lecture d'un PieceSlot comme d'une pièce, faite à la demande.

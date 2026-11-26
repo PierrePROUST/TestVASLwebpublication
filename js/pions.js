@@ -23,7 +23,10 @@ let _uidSeq = 0;
 
 // Une pièce qui ne s'empile pas (trait Immobilized « R ») forme à elle
 // seule sa pile : un Fire Lane posé sur des unités ne les rejoint pas.
-const cle = p => p.seul ? '#' + p.uid : p.x + ',' + p.y;
+// Une pièce d'une couche de pièces (LayeredPieceCollection : « Control »,
+// « Perimeter ») ne s'empile qu'avec celles de sa couche
+// (canPiecesMerge) : sa pile porte le nom de la couche.
+const cle = p => p.seul ? '#' + p.uid : p.x + ',' + p.y + (p.calque ? '|' + p.calque : '');
 const vivants = () => pions.filter(p => !p.deleted);
 // Une pile, du fond vers le sommet. Simple filtre, toujours exact : seul
 // le rendu complet (rendreToutes) passe par un index des piles.
@@ -55,7 +58,7 @@ let _sel = new Set();          // pions sélectionnés
 let _depliees = new Set();     // clés des piles dépliées
 // Ni un pion HIP de l'adversaire, ni une carte ou un panneau de VASL Tools,
 // ni un overlay de l'extension VASL Overlays.
-const selectionnable = p => !!p && !p.deleted && !p.cache && !p.fond && !p.affichageSeul;
+const selectionnable = p => !!p && !p.deleted && !p.cache && !p.fond && !p.affichageSeul && !calqueEteint(p);
 const selDans = k => pile(k).filter(p => _sel.has(p));
 const pileEntiereSel = k => { const s = pile(k).filter(selectionnable); return s.length > 0 && s.every(p => _sel.has(p)); };
 // Fonctions appelées après chaque changement de sélection (panneau, éventail…).
@@ -173,8 +176,11 @@ function creerPion(seg, ordre){
   // garde que son ÉTAT.
   const p = Object.assign(Object.create(PION), {id: pions.length, uid: d.uid, x: d.x, y: d.y, ordre, nom: d.nom,
              el, face, sz: Math.round(48 * SC), deleted: false,
-             seul: !!(d.immob && !d.immob.empile)});
+             seul: !!(d.immob && !d.immob.empile), libre: !!(d.immob && d.immob.libre)});
   _attacherSeg(p, seg);
+  p.calque = calqueDe(p);
+  if(p.calque) el.dataset.calque = p.calque;
+  if(seg.includes('AreaOfEffect;')) _airesPossibles = true;
   // Sélection réservée à Maj+clic (ou impossible) : un clic simple la
   // traverse vers les pièces de dessous, comme dans VASSAL.
   if(d.immob && (d.immob.maj || d.immob.jamais)) el.classList.add(d.immob.jamais ? 'immob-jamais' : 'immob');
@@ -480,7 +486,7 @@ async function imagesCouches(d, k, cote){
     o.className = 'couche';
     o.src = u;
     await o.decode().catch(() => {});
-    const w = o.naturalWidth * k, h = o.naturalHeight * k;
+    const w = o.naturalWidth * k * (c.echelle || 1), h = o.naturalHeight * k * (c.echelle || 1);
     if(w && h){
       o.style.width = w + 'px'; o.style.height = h + 'px';
       o.style.left = (cote/2 + c.dx*k - w/2) + 'px';
@@ -637,7 +643,9 @@ function rendrePile(k, tous){
     // Un overlay déplaçable se pose sur le terrain, au-dessus des cartes et
     // sous tous les pions (Fire Lane compris) ; entre overlays, le dernier
     // posé est dessus.
-    p.el.style.zIndex = p.fond ? 2 + i : p.couche === 'overlay' ? 6 : p.seul ? 10 + _hauteurSous(p) : (deplie ? 5000 : 10) + i;
+    p.el.style.zIndex = p.fond ? 2 + i : p.couche === 'overlay' ? 6 : p.calque ? zCalque(p, i, deplie)
+                      : p.seul ? 10 + _hauteurSous(p) : (deplie ? 5000 : 10) + i;
+    p.el.classList.toggle('calqueEteint', calqueEteint(p));
     p.el.classList.toggle('sel', _sel.has(p));
     p.el.classList.toggle('deplie', deplie);
     p.el.classList.toggle('verrou', p.affichageSeul || !COUCHES_SEL[p.couche || 'unite']);
@@ -646,9 +654,10 @@ function rendrePile(k, tous){
   _decorPile(k, s, rects, deplie);
   if(_reperes.brises || _reperes.sniper) dessinerReperes();
   if(_liens.size) _planifierLiens();
+  if(_airesPossibles) dessinerAires();
   // Les pièces non empilées posées au même endroit restent au-dessus.
   if(s.length && !s[0].seul)
-    for(const q of vivants()) if(q.seul && !q.fond && !q.cache && q.couche !== 'overlay' && q.x === s[0].x && q.y === s[0].y)
+    for(const q of vivants()) if(q.seul && !q.fond && !q.cache && !q.calque && q.couche !== 'overlay' && q.x === s[0].x && q.y === s[0].y)
       q.el.style.zIndex = 10 + _hauteurSous(q);
 }
 // Hauteur de la pile ordinaire sur laquelle une pièce non empilée est posée.
@@ -762,6 +771,273 @@ function _etendreCarte(reduire){
   }
   if(reduire ? w !== _mapW || h !== _mapH : w > _mapW || h > _mapH) _setMapSize(w, h);
   else if(_rotVue) _majScaler();    // tables sous la carte tournée
+}
+
+// ═══ COUCHES DE PIÈCES — LayeredPieceCollection de VASSAL ═══
+// L'extension Hideable Control Markers ajoute à la carte de jeu deux
+// couches de pièces, nommées par la propriété « Layer » de leurs pions :
+// Perimeter, puis Control ; tous les autres pions sont dans la couche
+// ordinaire, au-dessus (CompoundPieceCollection, dessinée depuis
+// bottomLayer). Une pièce ne s'empile qu'avec celles de sa couche (la clé
+// de sa pile porte le nom de la couche). Deux boutons de la carte
+// (LayerControl) font passer une couche au-dessus des autres, tour à tour,
+// et masquent ou montrent les couches de contrôle : une couche masquée
+// n'est ni dessinée ni sélectionnable. Comme dans VASSAL, ce réglage ne
+// vaut que pour ce joueur ; il n'entre ni dans la partie ni dans le log.
+var _etatCalques = {bas: 0, eteints: new Set()};
+const _ordreCalques = () => (_bdd && _bdd.calques) ? _bdd.calques.ordre : [];
+
+// Couche d'un pion : la valeur de sa propriété de couche, si c'est le nom
+// d'une couche ; sinon la couche ordinaire (« »).
+function calqueDe(p){
+  const c = _bdd && _bdd.calques;
+  if(!c || !c.ordre.length || !p.seg.includes(c.prop)) return '';
+  let v = '';
+  try { v = _proprietes(_developperPrototypes(_splitTypeState(p.seg), 0))[c.prop] || ''; } catch(e){}
+  return c.ordre.includes(v) ? v : '';
+}
+// La base arrivée, chaque pion rejoint sa couche.
+function assignerCalques(){
+  for(const p of pions){
+    p.calque = calqueDe(p);
+    if(p.calque) p.el.dataset.calque = p.calque; else delete p.el.dataset.calque;
+  }
+}
+const calqueEteint = p => !!(p && p.calque) && _etatCalques.eteints.has(p.calque);
+
+// Rang d'affichage d'une couche, 0 au fond : les couches se dessinent à
+// partir de bottomLayer, la couche ordinaire est la dernière de la liste.
+function rangCalque(nom){
+  const o = _ordreCalques(), n = o.length + 1;
+  const i = nom ? o.indexOf(nom) : o.length;
+  return ((i - _etatCalques.bas) % n + n) % n;
+}
+// Couche du dessus (getTopLayer) : son nom, « » pour l'ordinaire.
+function calqueDuDessus(){
+  const o = _ordreCalques(), n = o.length + 1;
+  const i = ((_etatCalques.bas - 1) % n + n) % n;
+  return i < o.length ? o[i] : '';
+}
+// z-index d'un pion d'une couche nommée : sous les pions ordinaires (mais
+// sur les overlays de terrain), ou au-dessus d'eux, piles dépliées
+// comprises, selon le rang de sa couche.
+function zCalque(p, i, deplie){
+  const r = rangCalque(p.calque), rb = rangCalque('');
+  return r < rb ? 7 + r : 6000 + 400 * r + (deplie ? 200 : 0) + i;
+}
+
+// Bouton LayerControl de la carte, désigné par le début de sa commande.
+function controleCalques(debut){
+  const c = _bdd && _bdd.calques;
+  return c ? c.controles.find(x => x.commande.startsWith(debut)) || null : null;
+}
+
+// LayerControl.launch : réinitialiser, tourner, activer, désactiver ou
+// basculer des couches (par nom ou par numéro).
+function commanderCalques(ctl){
+  if(!ctl) return;
+  const o = _ordreCalques(), n = o.length + 1, E = _etatCalques.eteints;
+  const noms = ctl.couches.map(x => /^\d+$/.test(x) ? o[+x] : x).filter(x => o.includes(x));
+  const tourner = sens => { _etatCalques.bas = ((_etatCalques.bas + sens) % n + n) % n; };
+  // Rotation qui saute les couches vides : on tourne jusqu'à ce qu'une
+  // couche peuplée soit au-dessus (CompoundPieceCollection.rotate).
+  const tournerPeuple = sens => {
+    if(!ctl.saut){ tourner(sens); return; }
+    for(let k = 0; k < n; k++){
+      tourner(sens);
+      const c = calqueDuDessus();
+      if(vivants().some(p => (p.calque || '') === c)) return;
+    }
+  };
+  switch(ctl.commande){
+    case 'Reset All Layers': _etatCalques.bas = 0; E.clear(); break;
+    case 'Rotate Layer Order Up': tournerPeuple(-1); break;
+    case 'Rotate Layer Order Down': tournerPeuple(+1); break;
+    case 'Make Layer Active': noms.forEach(x => E.delete(x)); break;
+    case 'Make Layer Inactive': noms.forEach(x => E.add(x)); break;
+    case 'Switch Layer between Active and Inactive': noms.forEach(x => { if(E.has(x)) E.delete(x); else E.add(x); }); break;
+    default: return;
+  }
+  purgerSelection();
+  rendreToutes();
+  dessinerAires();
+  if(_pileSel) afficherPile();
+  if(typeof rafraichirActions === 'function') rafraichirActions(['hcVoir', 'hcCycle']);
+}
+// Les couches que masque le bouton « Show / hide » sont-elles masquées ?
+const calquesHCMasques = () => {
+  const c = controleCalques('Switch');
+  return !!c && c.couches.some(x => _etatCalques.eteints.has(x));
+};
+
+// ═══ ZONES D'EFFET — AreaOfEffect et MapShader de VASSAL ═══
+// Trait AreaOfEffect :
+//   AreaOfEffect;couleur;transparence;rayon;toujours;commande;touche;
+//   ombre;rayon fixe;propriété du rayon;description;nom;…
+// La zone est l'ensemble des hexagones à moins de « rayon » hexagones de
+// celui de la pièce (HexGrid.getGridShape). Sans ombre de carte, la pièce
+// la dessine elle-même, de sa couleur, à l'opacité « transparence » %.
+// Avec, elle n'apporte que sa forme à l'ombre de ce nom (MapShader) : une
+// seule forme pour toutes les pièces, dessinée sur les boards, sous les
+// pions, de la couleur et à l'opacité de l'ombre — les zones d'une même
+// couleur se fondent, celles de couleurs différentes se superposent.
+// HCAMapShader (Hideable Control Markers) retire de son ombre l'hexagone
+// central de toute pièce « Perimeter_area » : le lieu stratégique garde
+// la couleur de son marqueur.
+// Une pièce cachée (HIP adverse) ou d'une couche masquée n'a pas de zone.
+var _airesPossibles = false;
+const _cacheAires = new Map();     // type → [{i, couleur, opacite, …}]
+
+const _couleurJava = c => {
+  const v = (c || '').split(',').map(x => parseInt(x, 10));
+  return v.length >= 3 && v.every(Number.isFinite) ? `rgb(${v[0]},${v[1]},${v[2]})` : 'rgb(0,0,0)';
+};
+
+function _airesDuType(type){
+  if(_cacheAires.has(type)) return _cacheAires.get(type);
+  const out = [];
+  if(type.includes('AreaOfEffect;')) decoderTraits(type).forEach((t, i) => {
+    if(!/^AreaOfEffect;/.test(t)) return;
+    const f = _seq(t, ';');
+    out.push({i, couleur: _couleurJava(f[1]), opacite: (parseInt(f[2], 10) || 0) / 100,
+              rayon: parseInt(f[3], 10) || 0, toujours: f[4] !== 'false', ombre: (f[7] || '').trim(),
+              fixe: f[8] !== 'false', propriete: (f[9] || '').trim()});
+  });
+  _cacheAires.set(type, out);
+  return out;
+}
+
+// Zones actives d'un pion : [{couleur, opacite, ombre, rayon}].
+function airesDe(p){
+  const te = _typeEtEtat(p.seg);
+  if(!te) return [];
+  const A = _airesDuType(te.type);
+  if(!A.length) return [];
+  const S = decoderTraits(te.etat);
+  let pr = null;
+  const out = [];
+  for(const a of A){
+    if(!a.toujours && !/^true/.test(S[a.i] || '')) continue;
+    let r = a.rayon;
+    if(!a.fixe){
+      pr = pr || _proprietes(_developperPrototypes(_splitTypeState(p.seg), 0));
+      r = parseInt(pr[a.propriete], 10) || 0;
+    }
+    out.push({couleur: a.couleur, opacite: a.opacite, ombre: a.ombre, rayon: Math.max(0, r)});
+  }
+  return out;
+}
+
+// Hexagone dont le centre est le plus proche du point, à moins d'un
+// demi-hexagone.
+function hexDuPoint(x, y){
+  let best = null, bd = Infinity;
+  const cx = Math.floor(x / GRILLE_HEX), cy = Math.floor(y / GRILLE_HEX);
+  for(let i = -2; i <= 2; i++) for(let j = -2; j <= 2; j++)
+    for(const h of _grilleHex.get((cx + i) + ',' + (cy + j)) || []){
+      const d = (h.x - x) * (h.x - x) + (h.y - y) * (h.y - y);
+      if(d < bd){ bd = d; best = h; }
+    }
+  return best && bd <= best.hh * best.hh / 4 * 1.5 ? best : null;
+}
+// Hexagones à moins de `rayon` du point : de proche en proche, les voisins
+// étant ceux dont le centre est à moins de 1,2 hauteur d'hexagone. Les
+// demi-hexagones de deux boards voisins, au même endroit, ne comptent
+// qu'une fois.
+function hexesAutour(x, y, rayon){
+  const h0 = hexDuPoint(x, y);
+  if(!h0) return [];
+  const vus = [h0];
+  const connu = v => vus.some(h => Math.abs(h.x - v.x) < 6 && Math.abs(h.y - v.y) < 6);
+  let front = [h0];
+  for(let d = 0; d < rayon && front.length; d++){
+    const suiv = [];
+    for(const h of front){
+      const lim = h.hh * 1.2, k = Math.ceil(lim / GRILLE_HEX);
+      const cx = Math.floor(h.x / GRILLE_HEX), cy = Math.floor(h.y / GRILLE_HEX);
+      for(let i = -k; i <= k; i++) for(let j = -k; j <= k; j++)
+        for(const v of _grilleHex.get((cx + i) + ',' + (cy + j)) || []){
+          if(Math.hypot(v.x - h.x, v.y - h.y) > lim || connu(v)) continue;
+          vus.push(v); suiv.push(v);
+        }
+    }
+    front = suiv;
+  }
+  return vus;
+}
+// Contour d'un hexagone en pixels d'affichage (côtés plats en haut et en
+// bas, comme la grille VASL), pour un chemin SVG.
+function _cheminHex(h){
+  const r = h.hw * 2 / 3, d = h.hh / 2;
+  const pts = [[-r, 0], [-r / 2, -d], [r / 2, -d], [r, 0], [r / 2, d], [-r / 2, d]];
+  return 'M' + pts.map(([a, b]) => ((h.x + a) * SC).toFixed(1) + ' ' + ((h.y + b) * SC).toFixed(1)).join('L') + 'Z';
+}
+
+let _airesPrevues = false;
+function dessinerAires(){
+  if(_airesPrevues) return;
+  _airesPrevues = true;
+  requestAnimationFrame(() => { _airesPrevues = false; _dessinerAires(); });
+}
+function _dessinerAires(){
+  const NS = 'http://www.w3.org/2000/svg';
+  let s = document.getElementById('airesCarte');
+  const directes = [], ombres = new Map(), centres = [];
+  const ombreurs = (_bdd && _bdd.ombreurs) || new Map();
+  for(const p of vivants()){
+    if(p.cache || calqueEteint(p)) continue;
+    // HCAMapShader : centre de toute pièce « Perimeter_area ».
+    if(p.seg.includes('Perimeter_area')){
+      const h = hexDuPoint(p.x, p.y);
+      if(h && /Perimeter_area/.test(lirePiece(p.seg).nomBase)) centres.push(h);
+    }
+    for(const a of airesDe(p)){
+      const hexes = hexesAutour(p.x, p.y, a.rayon);
+      if(!hexes.length) continue;
+      const o = a.ombre && ombreurs.get(a.ombre);
+      if(a.ombre && !o) continue;
+      if(o){
+        if(!ombres.has(a.ombre)) ombres.set(a.ombre, []);
+        ombres.get(a.ombre).push(...hexes);
+      } else directes.push({a, hexes});
+    }
+  }
+  if(!directes.length && !ombres.size){ if(s) s.remove(); return; }
+  if(!s){
+    s = document.createElementNS(NS, 'svg');
+    s.id = 'airesCarte';
+    document.getElementById('mapInner').appendChild(s);
+  }
+  s.setAttribute('width', _mapW); s.setAttribute('height', _mapH);
+  s.innerHTML = '';
+  const memeHex = (a, b) => Math.abs(a.x - b.x) < 6 && Math.abs(a.y - b.y) < 6;
+  // Les ombres ne débordent pas des boards.
+  const clip = document.createElementNS(NS, 'clipPath');
+  clip.id = 'airesBoards';
+  for(const r of _rectsBoards){
+    const e = document.createElementNS(NS, 'rect');
+    e.setAttribute('x', r.x * SC); e.setAttribute('y', r.y * SC);
+    e.setAttribute('width', r.w * SC); e.setAttribute('height', r.h * SC);
+    clip.appendChild(e);
+  }
+  s.appendChild(clip);
+  const chemin = (hexes, couleur, opacite, clipper) => {
+    const e = document.createElementNS(NS, 'path');
+    e.setAttribute('d', hexes.map(_cheminHex).join(''));
+    e.setAttribute('fill', couleur);
+    e.setAttribute('fill-opacity', opacite);
+    if(clipper && _rectsBoards.length) e.setAttribute('clip-path', 'url(#airesBoards)');
+    s.appendChild(e);
+  };
+  for(const [nom, hexes] of ombres){
+    const o = ombreurs.get(nom);
+    // Une seule forme : chaque hexagone une fois (pas de double opacité).
+    let u = [];
+    for(const h of hexes) if(!u.some(v => memeHex(v, h))) u.push(h);
+    if(o.centresHors) u = u.filter(h => !centres.some(c => memeHex(c, h)));
+    if(u.length && o.type !== 'Background') chemin(u, o.couleur, o.opacite, true);
+  }
+  for(const {a, hexes} of directes) chemin(hexes, a.couleur, a.opacite, false);
 }
 
 // ═══ IMPORT ═══

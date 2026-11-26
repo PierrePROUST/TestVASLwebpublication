@@ -48,6 +48,8 @@ body[data-terminal=tactile]{--cible:44px}
 .barreDes .act.ico{height:24px;min-width:0;padding:1px 8px;font-size:13px}
 .act.ico{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;min-width:30px;height:28px;flex:none}
 .act img{height:16px;vertical-align:-3px}
+/* Vignette d'un board (Pick new boards) : un liseré pour le détacher du fond. */
+.act img.icBoard{border:1px solid #3a3a30;border-radius:2px;box-sizing:border-box}
 .act.actif{border-color:var(--accent);color:var(--accent)}
 .act.enreg.actif{border-color:#c03a3a;color:#ff8a8a}
 .act.reseau.actif{border-color:#3c8f4a;color:#9fe0a8}
@@ -667,6 +669,10 @@ body.maj .pion.immob{pointer-events:auto}
 /* Terrain sous la pile (CounterDetailViewer « show terrain beneath ») */
 .survol .terrain{display:block}
 .survol .lieuT{font-size:10px;line-height:1.1;opacity:.85}
+/* Au doigt (appui simple sur une pile) : dans la largeur de l'écran, les
+   pions passent à la ligne. */
+.survol.tap .rang{flex-wrap:wrap;max-width:calc(100vw - 24px)}
+.survol.tap .terrain{max-width:calc(100vw - 24px);height:auto}
 #ctx,.ssmenu{position:fixed;z-index:9600;min-width:190px;max-width:340px;max-height:80vh;overflow:auto;
   background:var(--menu-fond);color:var(--menu-texte);border:1px solid var(--menu-bord);border-radius:4px;
   box-shadow:0 6px 20px rgba(0,0,0,.55);font-size:13px;padding:3px 0;user-select:none;-webkit-user-select:none}
@@ -711,6 +717,13 @@ body.maj .pion.immob{pointer-events:auto}
    laisse voir les unités qu'il dissimule dessous (Concealment de VASL). */
 .pion.qTransparent{opacity:.45}
 #reperes{position:absolute;left:0;top:0;z-index:8400;pointer-events:none;overflow:visible}
+/* Zones d'effet et ombres de carte (AreaOfEffect, MapShader) : sur les
+   boards, sous les overlays et les pions. Couche de pièces masquée
+   (LayerControl) : ni dessinée ni saisissable. */
+#airesCarte{position:absolute;left:0;top:0;z-index:5;pointer-events:none;overflow:visible}
+.pion.calqueEteint{display:none !important}
+.hcItem{display:flex;align-items:center;gap:6px}
+.hcItem .hcIcone{width:22px;height:22px;object-fit:contain;flex:none}
 #filLOS{position:absolute;left:0;top:0;z-index:8500;pointer-events:none;overflow:visible}
 #liensPions{position:absolute;left:0;top:0;z-index:3;pointer-events:none;overflow:visible}
 .etiqLOS,.etiqLien{position:absolute;z-index:8600;pointer-events:none;transform-origin:0 0;white-space:nowrap;

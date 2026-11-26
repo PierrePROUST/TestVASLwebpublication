@@ -1164,6 +1164,7 @@ function cacherSurvol(){
   const t = document.getElementById('survol');
   if(t) t.remove();
   _survolCle = null;
+  _survolTap = null;
 }
 
 function afficherSurvol(k, cx, cy){
