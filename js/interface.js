@@ -53,9 +53,9 @@ function basculerVueCarte(){
 // (QC) qui entourent de rouge, au-dessus des pions, les hexagones des
 // pièces brisées ou MALF — couche BRK active, ni HIP ni dissimulées —, des
 // DM et des Disrupt, et ceux des snipers (cercle de 1,5 hexagone). Les
-// boutons portent la LMG russe (gpid 482) et le sniper US (gpid 778) de la
-// palette.
-const ICONE_BRISES = {gpid: '482', ico: '⭕'};
+// boutons portent la LMG russe (gpid 482) retournée sur sa face MALF
+// (couche BRK active) et le sniper US (gpid 778) de la palette.
+const ICONE_BRISES = {gpid: '482', ico: '⭕', brk: true};
 const ICONE_SNIPER = {gpid: '778', ico: '🎯'};
 const ICONE_NOUVELLE = {gpid: '3b5:7124', ico: '🆕'};
 const _reperes = {brises: false, sniper: false};
@@ -134,7 +134,9 @@ const ACTIONS = {
   all:      {lib: 'Remove all — retirer tous les pions d\'un type…', court: 'ALL', img: 'QC/Remove.png',
              faire: ancre => ouvrirMassRemover(ancre)},
   // BoardSwapper de VASL (menu de la carte) : changer les boards de la partie.
-  boards:   {lib: 'Pick new boards for this scenario', court: 'Boards', img: 'newBoards.gif',
+  // Icône : un morceau du board 00 (board vierge de VASL), newBoards.gif de
+  // VASL à défaut.
+  boards:   {lib: 'Pick new boards for this scenario', court: 'Boards', img: '00', imgBoard: 'newBoards.gif',
              faire: () => ouvrirChoixBoards(), actif: () => !!_source},
   brises:   {lib: 'Entourer les unités brisées et les armes MALF', court: 'Broken', ico: '⭕', pion: ICONE_BRISES,
              faire: () => basculerRepere('brises'), allume: () => _reperes.brises},
@@ -277,6 +279,7 @@ function rendreAction(id, forme = 'icone'){
     } else if(a.img){
       const im = document.createElement('img');
       im.alt = '';
+      if(a.imgBoard) im.className = 'icBoard';
       el.appendChild(im);
     } else if(a.ico && forme !== 'bouton'){
       const i = document.createElement('span');
@@ -327,6 +330,12 @@ function _composerIconePion(spec = ICONE_PION){
     if(!def) return null;
     const i = def.T.findIndex(t => /^label;/.test(t) && t.split(';')[2] === 'Name');
     if(i >= 0 && spec.nom) def.S[i] = spec.nom;
+    // « brk » : la face retournée, couche Embellishment de la propriété BRK
+    // activée (niveau positif), comme après Ctrl+F.
+    if(spec.brk){
+      const j = def.T.findIndex(t => /^emb2;/.test(t) && t.split(';').includes('BRK'));
+      if(j >= 0) def.S[j] = String(Math.abs(parseInt(def.S[j], 10) || 1)) + (def.S[j] || '').replace(/^-?\d+/, '');
+    }
     const d = lirePiece('+/icone/' + encoderTraits(def.T) + '/' + encoderTraits(def.S));
     const m = document.createElement('div');
     m.className = 'modelePion';
@@ -360,6 +369,30 @@ function iconePion(spec = ICONE_PION){
   return b;
 }
 
+// ── Icône d'un board : un morceau du haut (H1 à J3 sur le board 00 :
+// hexagones, bois et route), réduit en vignette. L'archive vient du
+// dépôt VASL comme pour la carte (et du cache du service worker hors
+// ligne) ; à défaut, l'image « secours » du dépôt VASL.
+const _iconesBoard = new Map();          // nom → Promise<URL | null>
+function iconeBoard(nom, secours){
+  if(!_iconesBoard.has(nom)) _iconesBoard.set(nom, (async () => {
+    const gif = _gifDuBoard(await _archive(nom), nom);
+    if(!gif) throw new Error('bd' + nom + '.gif absent');
+    const bm = await createImageBitmap(new Blob([gif], {type: 'image/gif'}));
+    const x0 = Math.min(330, bm.width - 288);
+    const c = document.createElement('canvas');
+    c.width = 160; c.height = 100;
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(bm, x0, 0, 288, 180, 0, 0, c.width, c.height);
+    bm.close();
+    const b = await new Promise(r => c.toBlob(r, 'image/png'));
+    if(!b) throw new Error('vignette');
+    return URL.createObjectURL(b);
+  })().catch(() => secours ? chargerImage(secours) : null));
+  return _iconesBoard.get(nom);
+}
+
 // Une feuille du bas qui liste des actions, en grand.
 function ouvrirFeuilleActions(titre, ids, id = 'feuilleActions'){
   const f = ouvrirFeuille({id, titre});
@@ -390,7 +423,7 @@ function _majAction(el, a, id){
   const im = a.img && el.querySelector(':scope > img');
   if(im && im._chemin !== _v(a.img)){
     const ch = im._chemin = _v(a.img);
-    chargerImage(ch).then(u => { if(u && im._chemin === ch) im.src = u; });
+    (a.imgBoard ? iconeBoard(ch, a.imgBoard) : chargerImage(ch)).then(u => { if(u && im._chemin === ch) im.src = u; });
   }
   el.title = t ? `${lib} [${t}]` : lib;
   el.setAttribute('aria-label', lib);

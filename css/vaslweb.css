@@ -48,6 +48,8 @@ body[data-terminal=tactile]{--cible:44px}
 .barreDes .act.ico{height:24px;min-width:0;padding:1px 8px;font-size:13px}
 .act.ico{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;min-width:30px;height:28px;flex:none}
 .act img{height:16px;vertical-align:-3px}
+/* Vignette d'un board (Pick new boards) : un liseré pour le détacher du fond. */
+.act img.icBoard{border:1px solid #3a3a30;border-radius:2px;box-sizing:border-box}
 .act.actif{border-color:var(--accent);color:var(--accent)}
 .act.enreg.actif{border-color:#c03a3a;color:#ff8a8a}
 .act.reseau.actif{border-color:#3c8f4a;color:#9fe0a8}
